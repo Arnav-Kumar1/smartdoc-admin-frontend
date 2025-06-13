@@ -1,6 +1,6 @@
 import time
 import requests
-
+BACKEND_BACKEND_API_URL = os.getenv("BACKEND_BACKEND_API_URL")
 def wait_for_backend(timeout=60, interval=3):
     """
     Pings the backend service until it responds successfully or a timeout is reached.
@@ -10,7 +10,7 @@ def wait_for_backend(timeout=60, interval=3):
     while time.time() - start_time < timeout:
         try:
             # Attempt to hit a lightweight backend endpoint (e.g., the root '/')
-            response = requests.get(API_URL, timeout=5) # Small timeout for each ping attempt
+            response = requests.get(BACKEND_API_URL, timeout=5) # Small timeout for each ping attempt
             if response.status_code == 200:
                 return True # Backend is awake and responsive
         except requests.exceptions.ConnectionError:
