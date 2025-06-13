@@ -1,3 +1,6 @@
+import time
+import requests
+
 def wait_for_backend(timeout=60, interval=3):
     """
     Pings the backend service until it responds successfully or a timeout is reached.
