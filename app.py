@@ -3,11 +3,19 @@ import streamlit as st
 import requests
 import os
 import time
+from app_utils import wait_for_backend 
 
 st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
 st.title("🛠 Admin Dashboard - SmartDoc AI")
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+st.info("Attempting to connect to the backend API...")
+if wait_for_backend():
+    st.success("Successfully connected to the backend API!")
+else:
+    st.error("Failed to connect to the backend API. Please ensure the backend is running.")
+    st.stop() # Stop the Streamlit app if backend is not reachable
 
 st.sidebar.header("Navigation")
 page = st.sidebar.radio("Go to", ["📄 Documents", "👤 Users"])
