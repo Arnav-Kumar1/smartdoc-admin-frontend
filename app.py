@@ -7,8 +7,6 @@ import time
 st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
 st.title("🛠 Admin Dashboard - SmartDoc AI")
 
-
-# BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 st.write(f"DEBUG: BACKEND_API_URL as seen by app: '{BACKEND_API_URL}'")
 from app_utils import wait_for_backend 
 
