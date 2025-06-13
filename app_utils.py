@@ -1,7 +1,7 @@
 import time
 import requests
 import os
-BACKEND_API_URL = os.getenv("BACKEND_BACKEND_API_URL")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 
 
 
