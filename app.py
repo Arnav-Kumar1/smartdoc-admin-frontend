@@ -8,7 +8,7 @@ from app_utils import wait_for_backend
 st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
 st.title("🛠 Admin Dashboard - SmartDoc AI")
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 
 st.info("Attempting to connect to the backend API...")
 if wait_for_backend():
@@ -36,7 +36,7 @@ def verify_admin_access():
         st.error("No authentication token found")
         return False
     try:
-        response = requests.get(f"{API_URL}/admin/users", headers=headers)
+        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
         if response.status_code == 200:
             st.session_state.is_admin = True  # Store in session
             return True
@@ -60,7 +60,7 @@ def admin_login():
         if submitted:
             try:
                 response = requests.post(
-                    f"{API_URL}/auth/token",
+                    f"{BACKEND_API_URL}/auth/token",
                     data={"username": email, "password": password}
                 )
                 if response.status_code == 200:
@@ -95,7 +95,7 @@ def fetch_documents():
     if not headers:
         return []
     try:
-        response = requests.get(f"{API_URL}/admin/documents", headers=headers)  # Changed endpoint
+        response = requests.get(f"{BACKEND_API_URL}/admin/documents", headers=headers)  # Changed endpoint
         if response.status_code == 200:
             return response.json()
         else:
@@ -112,7 +112,7 @@ def fetch_users():
     if not headers:
         return []
     try:
-        response = requests.get(f"{API_URL}/admin/users", headers=headers)
+        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
         if response.status_code == 200:
             return response.json()
         else:
@@ -249,7 +249,7 @@ if page == "📄 Documents":
                 if st.button(f"🗑️ Delete Document", key=f"del_doc_{doc['id']}"):
                     try:
                         response = requests.delete(
-                            f"{API_URL}/admin/documents/{doc['id']}", 
+                            f"{BACKEND_API_URL}/admin/documents/{doc['id']}", 
                             headers=get_auth_header()
                         )
                         if response.status_code == 200:
@@ -375,7 +375,7 @@ elif page == "👤 Users":
                             if st.button("✔️ Confirm Delete", key=f"confirm_del_{user['id']}", type="primary"):
                                 try:
                                     response = requests.delete(
-                                        f"{API_URL}/admin/users/{user['id']}", 
+                                        f"{BACKEND_API_URL}/admin/users/{user['id']}", 
                                         headers=get_auth_header()
                                     )
                                     if response.status_code == 200:
