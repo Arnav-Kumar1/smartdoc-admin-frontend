@@ -1,5 +1,6 @@
 import time
 import requests
+import os
 BACKEND_BACKEND_API_URL = os.getenv("BACKEND_BACKEND_API_URL")
 def wait_for_backend(timeout=60, interval=3):
     """
