@@ -239,7 +239,7 @@ else: # User is authenticated as admin
         
         # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-        non_vectorized_count = len(all_documents) - vectorized_count # Corrected variable name
+        non_vectorized_count = len(all_documents) - vectorized_count 
         
         with col2: 
             st.metric(label="Vectorized Docs", value=vectorized_count)
@@ -349,6 +349,65 @@ else: # User is authenticated as admin
                 st.info("User data missing 'created_at' or is empty for trend analysis.")
         else:
             st.info("No user data to display registration trends.")
+
+
+    # --- NEW: Most Active Users (by Document Count) ---
+    st.subheader("Most Active Users (by Document Count)")
+    if all_documents and all_users:
+        doc_counts_per_user = {}
+        for doc in all_documents:
+            user_id = str(doc.get('user_id'))
+            if user_id: # Ensure user_id is not None
+                doc_counts_per_user[user_id] = doc_counts_per_user.get(user_id, 0) + 1
+        
+        # Create a DataFrame for plotting
+        if doc_counts_per_user:
+            active_users_df = pd.DataFrame(doc_counts_per_user.items(), columns=['user_id', 'document_count'])
+            active_users_df = active_users_df.sort_values('document_count', ascending=False).head(5) # Top 5
+            
+            # Map user_id to username for better readability
+            user_id_to_username = {user['id']: user['username'] for user in all_users}
+            active_users_df['username'] = active_users_df['user_id'].map(user_id_to_username).fillna('Unknown User')
+
+            fig_active_users = px.bar(active_users_df, x='username', y='document_count',
+                                        title='Top 5 Users by Documents Uploaded',
+                                        labels={'username': 'User', 'document_count': 'Number of Documents'},
+                                        color='document_count', # Color bars by count
+                                        color_continuous_scale=px.colors.sequential.Viridis,
+                                        text='document_count')
+            fig_active_users.update_traces(textposition='outside')
+            fig_active_users.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
+            st.plotly_chart(fig_active_users, use_container_width=True)
+        else:
+            st.info("No documents uploaded or user data available to determine active users.")
+    else:
+        st.info("Not enough data to determine active users (either no documents or no users fetched).")
+
+
+    # --- NEW: Top Summarized Documents ---
+    st.subheader("Top Summarized Documents")
+    if all_documents:
+        summarized_docs = [doc for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""]]
+        
+        if summarized_docs:
+            # Sort by length of summary (as a proxy for "richness" of summarization)
+            # Or by upload_time if you prefer "most recent summarized"
+            top_docs = sorted(summarized_docs, key=lambda x: len(x['summary']) if x['summary'] else 0, reverse=True)[:5] # Top 5 by summary length
+
+            st.write("Here are some of the top summarized documents:")
+            for i, doc in enumerate(top_docs):
+                with st.expander(f"{i+1}. {doc['filename']} (Summarized by {next((u['username'] for u in all_users if str(u['id']) == str(doc['user_id'])), 'Unknown User')})"):
+                    st.markdown(f"**Document ID:** `{doc['id']}`")
+                    st.markdown(f"**File Type:** `{doc['file_type']}`")
+                    st.markdown(f"**Upload Time:** `{doc['upload_time']}`")
+                    st.markdown(f"**Vectorized:** {'✅ Yes' if doc.get('is_vectorized') else '❌ No'}")
+                    st.markdown("---")
+                    st.markdown("**AI-Generated Summary:**")
+                    st.info(doc['summary'])
+        else:
+            st.info("No summarized documents found yet.")
+    else:
+        st.info("No document data available to display top summarized documents.")
 
 
     # --- Documents Page ---
