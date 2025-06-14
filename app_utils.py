@@ -1,5 +1,6 @@
 import time
 import requests
+import streamlit as st
 import os
 BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 
