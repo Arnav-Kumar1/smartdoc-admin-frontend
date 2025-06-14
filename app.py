@@ -128,7 +128,7 @@ def admin_login():
 
                             if verify_admin_access():
                                 st.success("Admin login successful! Redirecting to dashboard...")
-                                st.experimental_rerun()
+                                st.rerun()
                             else:
                                 st.error("Logged in, but this account does not have administrator privileges.")
                                 st.session_state.access_token = None # Clear token if not admin
@@ -213,7 +213,7 @@ else: # User is authenticated as admin
 
         st.success("You have been logged out successfully.")
         time.sleep(1)
-        st.experimental_rerun() # Force rerun to go back to login screen
+        st.rerun() # Force rerun to go back to login screen
 
 
     # --- Documents Page ---
@@ -315,7 +315,7 @@ else: # User is authenticated as admin
                                         del st.session_state.unique_user_ids
                                     st.success("Document deleted successfully!")
                                     st.session_state.doc_page = 1
-                                    st.experimental_rerun()
+                                    st.rerun()
                                 else:
                                     st.error(f"Failed to delete document: {response.json().get('detail', 'Unknown error')}")
                             except Exception as e:
@@ -441,13 +441,13 @@ else: # User is authenticated as admin
                                             st.success("User and all associated documents deleted successfully!")
                                             st.session_state[delete_state_key] = False
                                             st.session_state.user_page = 1
-                                            st.experimental_rerun()
+                                            st.rerun()
                                         else:
                                             st.error(f"Failed to delete user: {response.json().get('detail', 'Unknown error')}")
                                     except Exception as e:
                                         st.error(f"Error: {e}")
                                 if st.button("Cancel", key=f"cancel_del_{user['id']}"):
                                     st.session_state[delete_state_key] = False
-                                    st.experimental_rerun()
+                                    st.rerun()
         else:
             st.info("No users found.")
