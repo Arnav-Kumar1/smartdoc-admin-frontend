@@ -250,7 +250,7 @@ else: # User is authenticated as admin
         if all_documents:
             doc_status_data = pd.DataFrame({
                 'Status': ['Vectorized', 'Non-Vectorized'],
-                'Count': [vectorized_count, non_vectorized_count]
+                'Count': [vectorized_count, non_vectorization_count]
             })
             fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
                                     title='Document Vectorization Status',
@@ -258,6 +258,23 @@ else: # User is authenticated as admin
             st.plotly_chart(fig_doc_status, use_container_width=True)
         else:
             st.info("No document data to display status distribution.")
+
+        # --- NEW: Document Summarization Status ---
+        st.subheader("Document Summarization Status")
+        if all_documents:
+            summarized_count = sum(1 for doc in all_documents if doc.get('summary') not in [None, "None", "null", ""])
+            not_summarized_count = len(all_documents) - summarized_count
+            
+            doc_summary_data = pd.DataFrame({
+                'Status': ['Summarized', 'Not Summarized'],
+                'Count': [summarized_count, not_summarized_count]
+            })
+            fig_doc_summary = px.pie(doc_summary_data, values='Count', names='Status', 
+                                    title='Document Summarization Status',
+                                    color_discrete_sequence=px.colors.qualitative.G10) # Using a different color sequence
+            st.plotly_chart(fig_doc_summary, use_container_width=True)
+        else:
+            st.info("No document data to display summarization status.")
 
         st.subheader("Documents Uploaded Over Time")
         if all_documents:
