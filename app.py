@@ -16,7 +16,7 @@ load_dotenv()
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000") # Added default for robustness
 
 # Import the utility function to wait for the backend
-from app_utils import wait_for_backend 
+from app_utils import *
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
@@ -47,44 +47,7 @@ if 'backend_reachable' not in st.session_state: # Initialize backend reachable s
     st.session_state.backend_reachable = False
 
 
-# --- Function to get authorization header for API requests ---
-def get_auth_header():
-    if not st.session_state.access_token:
-        return None
-    return {"Authorization": f"Bearer {st.session_state.access_token}"}
 
-# --- Function to verify if the logged-in user has admin access ---
-def verify_admin_access():
-    headers = get_auth_header()
-    if not headers:
-        st.session_state.is_admin = False
-        return False
-    try:
-        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
-        if response.status_code == 200:
-            st.session_state.is_admin = True
-            return True
-        elif response.status_code == 403:
-            st.error(f"Access denied: {response.json().get('detail', 'Not an admin')}")
-            st.session_state.is_admin = False
-            return False
-        elif response.status_code == 401:
-             st.error("Authentication failed. Please log in again.")
-             st.session_state.access_token = None
-             st.session_state.is_admin = False
-             return False
-        else:
-            st.error(f"Error verifying admin access: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
-            st.session_state.is_admin = False
-            return False
-    except requests.exceptions.ConnectionError:
-        st.error("Network error: Could not connect to the backend API during admin verification. Please ensure the backend is running.")
-        st.session_state.is_admin = False
-        return False
-    except Exception as e:
-        st.error(f"An unexpected error occurred during admin verification: {e}")
-        st.session_state.is_admin = False
-        return False
 
 # --- Backend Connection Check with Spinner and Disappearing Message (moved to top-level conditional) ---
 # This block runs only once per full app load or if backend_reachable is reset (e.g., on logout)
@@ -100,58 +63,6 @@ if not st.session_state.backend_reachable:
         else:
             st.error("Failed to connect to the backend API. Please ensure the backend is running.")
             st.stop() # Stop the Streamlit app if backend is not reachable
-
-
-# --- Admin Login Function ---
-def admin_login():
-    # Display login form only if backend is reachable (confirmed by the above block)
-    if st.session_state.get('backend_reachable', False):
-        with st.form("login_form"):
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Login")
-            
-            if submitted:
-                if not email or not password:
-                    st.error("Please enter both email and password.")
-                else:
-                    try:
-                        login_response = requests.post(
-                            f"{BACKEND_API_URL}/auth/token",
-                            data={"username": email.lower(), "password": password} # Normalize email here too
-                        )
-                        
-                        if login_response.status_code == 200:
-                            token_data = login_response.json()
-                            st.session_state.access_token = token_data.get("access_token")
-                            st.session_state.token_type = token_data.get("token_type")
-                            st.session_state.user_id = token_data.get("user_id")
-                            st.session_state.username = token_data.get("username")
-
-                            if verify_admin_access():
-                                st.success("Admin login successful! Redirecting to dashboard...")
-                                st.rerun() 
-                            else:
-                                st.error("Logged in, but this account does not have administrator privileges.")
-                                st.session_state.access_token = None # Clear token if not admin
-                                st.session_state.is_admin = False
-                        elif login_response.status_code == 401:
-                            error_detail = login_response.json().get("detail", "").lower()
-                            if "gemini api key is missing" in error_detail:
-                                st.error("Gemini API key is missing. Please update your profile with a valid key.")
-                            elif "your gemini api key is invalid" in error_detail:
-                                st.error("Your Gemini API key is invalid. Please update your key or contact support.")
-                            elif "incorrect email or password" in error_detail:
-                                st.error("Incorrect email or password.")
-                            else:
-                                st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')}")
-                        else:
-                            st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')}")
-                    except requests.exceptions.ConnectionError:
-                        st.error("Could not connect to the API. Please ensure the backend is running.")
-                    except Exception as e:
-                        st.error(f"An unexpected error occurred during login: {e}")
-    st.stop() # Stop execution if we're in the login state
 
 
 # --- Data Fetching Functions (Moved to top-level for consistent definition) ---
