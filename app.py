@@ -41,6 +41,8 @@ if 'sort_order_docs' not in st.session_state:
     st.session_state.sort_order_docs = 'desc'  # Default: latest first
 if 'sort_order_users' not in st.session_state:
     st.session_state.sort_order_users = 'desc' # Default: latest first
+if 'backend_reachable' not in st.session_state: # Initialize backend reachable status
+    st.session_state.backend_reachable = False
 
 
 # --- Function to get authorization header for API requests ---
@@ -82,25 +84,25 @@ def verify_admin_access():
         st.session_state.is_admin = False
         return False
 
+# --- Backend Connection Check with Spinner and Disappearing Message (moved to top-level conditional) ---
+# This block runs only once per full app load or if backend_reachable is reset (e.g., on logout)
+if not st.session_state.backend_reachable:
+    connection_status_placeholder = st.empty() # Placeholder for connection messages
+    with st.spinner("Attempting to connect to the backend API..."):
+        if wait_for_backend():
+            success_message_placeholder = st.empty()
+            success_message_placeholder.success("Successfully connected to the backend API!")
+            time.sleep(1)
+            success_message_placeholder.empty()
+            st.session_state.backend_reachable = True # Mark backend as reachable
+        else:
+            st.error("Failed to connect to the backend API. Please ensure the backend is running.")
+            st.stop() # Stop the Streamlit app if backend is not reachable
+
+
 # --- Admin Login Function ---
 def admin_login():
-    # Only perform the backend connection check *before* displaying the login form
-    # and only if the backend hasn't been confirmed reachable yet
-    if 'backend_reachable' not in st.session_state or not st.session_state.backend_reachable:
-        connection_status_placeholder = st.empty() # Placeholder for connection messages
-
-        with st.spinner("Attempting to connect to the backend API..."):
-            if wait_for_backend():
-                success_message_placeholder = st.empty()
-                success_message_placeholder.success("Successfully connected to the backend API!")
-                time.sleep(1)
-                success_message_placeholder.empty()
-                st.session_state.backend_reachable = True # Mark backend as reachable
-            else:
-                st.error("Failed to connect to the backend API. Please ensure the backend is running.")
-                st.stop() # Stop the Streamlit app if backend is not reachable
-
-    # Display login form only if backend is reachable or already confirmed
+    # Display login form only if backend is reachable (confirmed by the above block)
     if st.session_state.get('backend_reachable', False):
         with st.form("login_form"):
             email = st.text_input("Email", key="login_email")
@@ -126,7 +128,7 @@ def admin_login():
 
                             if verify_admin_access():
                                 st.success("Admin login successful! Redirecting to dashboard...")
-                                st.rerun()
+                                st.experimental_rerun()
                             else:
                                 st.error("Logged in, but this account does not have administrator privileges.")
                                 st.session_state.access_token = None # Clear token if not admin
@@ -150,6 +152,44 @@ def admin_login():
     st.stop() # Stop execution if we're in the login state
 
 
+# --- Data Fetching Functions (Moved to top-level for consistent definition) ---
+@st.cache_data(ttl=300) # Cache for 5 minutes
+def fetch_documents():
+    headers = get_auth_header()
+    if not headers: return []
+    try:
+        response = requests.get(f"{BACKEND_API_URL}/admin/documents", headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Failed to fetch documents: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
+            return []
+    except requests.exceptions.ConnectionError:
+        st.error("Network error: Could not connect to backend to fetch documents.")
+        return []
+    except Exception as e:
+        st.error(f"Error fetching documents: {e}")
+        return []
+
+@st.cache_data(ttl=300) # Cache for 5 minutes
+def fetch_users():
+    headers = get_auth_header()
+    if not headers: return []
+    try:
+        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Failed to fetch users: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
+            return []
+    except requests.exceptions.ConnectionError:
+        st.error("Network error: Could not connect to backend to fetch users.")
+        return []
+    except Exception as e:
+        st.error(f"Error fetching users: {e}")
+        return []
+
+
 # --- Main Application Logic (Runs if authenticated as admin) ---
 if not st.session_state.get('is_admin', False):
     admin_login() # Call login function if not authenticated
@@ -168,38 +208,19 @@ else: # User is authenticated as admin
         # Clear cached data and session state variables
         st.session_state.pop('unique_user_ids', None)
         st.session_state.pop('sorted_users', None)
-        # Clear st.cache_data for functions like fetch_documents/fetch_users
-        st.cache_data.clear()
+        st.cache_data.clear() # Clear st.cache_data for functions like fetch_documents/fetch_users
         st.cache_resource.clear() # Clear st.cache_resource as well if used
 
         st.success("You have been logged out successfully.")
         time.sleep(1)
-        st.rerun() # Force rerun to go back to login screen
+        st.experimental_rerun() # Force rerun to go back to login screen
 
 
     # --- Documents Page ---
     if page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
         
-        @st.cache_data(ttl=300) # Cache for 5 minutes
-        def fetch_documents():
-            headers = get_auth_header()
-            if not headers: return []
-            try:
-                response = requests.get(f"{BACKEND_API_URL}/admin/documents", headers=headers)
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    st.error(f"Failed to fetch documents: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
-                    return []
-            except requests.exceptions.ConnectionError:
-                st.error("Network error: Could not connect to backend to fetch documents.")
-                return []
-            except Exception as e:
-                st.error(f"Error fetching documents: {e}")
-                return []
-
-        all_documents = fetch_documents()
+        all_documents = fetch_documents() # Call the now globally defined function
         
         if 'unique_user_ids' not in st.session_state:
             st.session_state.unique_user_ids = sorted(list({str(doc['user_id']) for doc in all_documents}))
@@ -248,7 +269,6 @@ else: # User is authenticated as admin
             
             if not filtered_docs:
                 st.info("No documents found matching your search criteria.")
-                # Removed st.stop() here so other parts of the app can still run if needed
             else:
                 PAGE_SIZE = 8
                 total_pages = max(1, len(filtered_docs) // PAGE_SIZE + (1 if len(filtered_docs) % PAGE_SIZE > 0 else 0))
@@ -295,7 +315,7 @@ else: # User is authenticated as admin
                                         del st.session_state.unique_user_ids
                                     st.success("Document deleted successfully!")
                                     st.session_state.doc_page = 1
-                                    st.rerun()
+                                    st.experimental_rerun()
                                 else:
                                     st.error(f"Failed to delete document: {response.json().get('detail', 'Unknown error')}")
                             except Exception as e:
@@ -309,11 +329,11 @@ else: # User is authenticated as admin
         
         sort_col1, sort_col2 = st.columns([1, 3])
         with sort_col1:
-            if st.button("🔽 Sort Latest First" if st.session_state.sort_order_users == 'asc' else "🔼 Sort Oldest First"):
+            if st.button("🔽 Sort Latest First" if st.session_state.sort_order_users == 'asc' else "🔼 Sort Oldest First", key="user_sort_btn"): # Added key for uniqueness
                 st.session_state.sort_order_users = 'desc' if st.session_state.sort_order_users == 'asc' else 'asc'
                 st.rerun()
         
-        users = fetch_users()
+        users = fetch_users() # Call the now globally defined function
         
         if users:
             if 'sorted_users' not in st.session_state or st.session_state.sort_order_users != st.session_state.get('_prev_sort_order_users', None):
@@ -421,13 +441,13 @@ else: # User is authenticated as admin
                                             st.success("User and all associated documents deleted successfully!")
                                             st.session_state[delete_state_key] = False
                                             st.session_state.user_page = 1
-                                            st.rerun()
+                                            st.experimental_rerun()
                                         else:
                                             st.error(f"Failed to delete user: {response.json().get('detail', 'Unknown error')}")
                                     except Exception as e:
                                         st.error(f"Error: {e}")
                                 if st.button("Cancel", key=f"cancel_del_{user['id']}"):
                                     st.session_state[delete_state_key] = False
-                                    st.rerun()
+                                    st.experimental_rerun()
         else:
             st.info("No users found.")
