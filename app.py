@@ -155,9 +155,10 @@ def admin_login():
 
 
 # --- Data Fetching Functions (Moved to top-level for consistent definition) ---
+# Added 'token' parameter to @st.cache_data to ensure cache invalidation on token change
 @st.cache_data(ttl=300) # Cache for 5 minutes
-def fetch_documents():
-    headers = get_auth_header()
+def fetch_documents(token: str): # Accepts token as argument for caching key
+    headers = {"Authorization": f"Bearer {token}"} if token else None
     if not headers: return []
     try:
         response = requests.get(f"{BACKEND_API_URL}/admin/documents", headers=headers)
@@ -173,12 +174,15 @@ def fetch_documents():
         st.error(f"Error fetching documents: {e}")
         return []
 
+# Added 'token' parameter to @st.cache_data to ensure cache invalidation on token change
 @st.cache_data(ttl=300) # Cache for 5 minutes
-def fetch_users():
-    headers = get_auth_header()
-    if not headers: return []
+def fetch_users(token: str): # Accepts token as argument for caching key
+    headers = {"Authorization": f"Bearer {token}"} if token else None
+    if not headers:
+        return []
     try:
         response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
+        
         if response.status_code == 200:
             return response.json()
         else:
@@ -211,7 +215,7 @@ else: # User is authenticated as admin
         # Clear cached data and session state variables
         st.session_state.pop('unique_user_ids', None)
         st.session_state.pop('sorted_users', None)
-        st.cache_data.clear() # Clear st.cache_data for functions like fetch_documents/fetch_users
+        st.cache_data.clear() # Clear ALL st.cache_data for functions in this script
         st.cache_resource.clear() # Clear st.cache_resource as well if used
 
         st.success("You have been logged out successfully.")
@@ -223,21 +227,21 @@ else: # User is authenticated as admin
     elif page == "📊 Dashboard":
         st.header("📊 Admin Dashboard Overview")
         
-        # Fetch all data needed for the dashboard (cached from previous runs)
-        all_documents = fetch_documents()
-        all_users = fetch_users()
+        # Pass access_token to cached functions to ensure cache invalidation on login/logout
+        all_documents = fetch_documents(st.session_state.access_token)
+        all_users = fetch_users(st.session_state.access_token)
 
         st.subheader("Key Metrics")
-        col1, col2 = st.columns(2) # Changed to 2 columns as one metric is removed
+        col1, col2 = st.columns(2) 
         with col1:
             st.metric(label="Total Users", value=len(all_users))
-            st.metric(label="Total Documents", value=len(all_documents)) # Moved to first column
+            st.metric(label="Total Documents", value=len(all_documents)) 
         
         # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
         non_vectorized_count = len(all_documents) - vectorized_count
         
-        with col2: # Moved to second column
+        with col2: 
             st.metric(label="Vectorized Docs", value=vectorized_count)
             st.metric(label="Non-Vectorized Docs", value=non_vectorized_count)
 
@@ -257,53 +261,32 @@ else: # User is authenticated as admin
 
         st.subheader("Documents Uploaded Over Time")
         if all_documents:
-            # Convert to DataFrame and ensure 'upload_time' is datetime
             docs_df = pd.DataFrame(all_documents)
             
-            # --- DEBUGGING: Display the DataFrame to check parsed dates ---
-            # st.write("DEBUG: Docs DataFrame (raw):")
-            # st.dataframe(docs_df) # Show the DataFrame as received from API
-            
             if 'upload_time' in docs_df.columns and not docs_df['upload_time'].empty:
-                # Attempt to convert, handle errors by coercing invalid dates to NaT
                 docs_df['upload_time_dt'] = pd.to_datetime(docs_df['upload_time'], errors='coerce')
-                
-                # Drop rows where upload_time_dt is NaT (failed conversions)
                 docs_df = docs_df.dropna(subset=['upload_time_dt'])
 
                 if not docs_df.empty:
-                    # Decide on granularity: if data spans multiple days, group by date.
-                    # If all data is on the same day, group by hour for better visibility.
                     min_date = docs_df['upload_time_dt'].min().date()
                     max_date = docs_df['upload_time_dt'].max().date()
 
                     if min_date == max_date:
-                        # All data on the same day, group by hour
-                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') # Group by hour
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') 
                         x_axis_label = 'Hour of Day'
-                        # tickformat = '%H:%M' # Removed tickformat for bar chart
                     else:
-                        # Data spans multiple days, group by date
                         docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
                         x_axis_label = 'Date'
-                        # tickformat = '%Y-%m-%d' # Removed tickformat for bar chart
 
-                    # Group by period and count documents
                     docs_over_time = docs_df.groupby('upload_period').size().reset_index(name='count')
                     docs_over_time = docs_over_time.sort_values('upload_period')
 
-                    # --- DEBUGGING: Display aggregated DataFrame for plotting ---
-                    # st.write("DEBUG: Docs Aggregated Data for Plotting:")
-                    # st.dataframe(docs_over_time)
-
-                    # Changed from px.line to px.bar for better comprehension with sparse data
                     fig_docs_time = px.bar(docs_over_time, x='upload_period', y='count', 
                                             title='Documents Uploaded Over Time',
                                             labels={'upload_period': x_axis_label, 'count': 'Number of Documents'},
-                                            text='count') # Show count directly on bars
-                    fig_docs_time.update_traces(textposition='outside') # Position text outside bars
-                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') # Text sizing
-                    # fig_docs_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) # Removed rangeslider for bar chart
+                                            text='count') 
+                    fig_docs_time.update_traces(textposition='outside') 
+                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
                     st.plotly_chart(fig_docs_time, use_container_width=True)
                 else:
                     st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
@@ -314,53 +297,33 @@ else: # User is authenticated as admin
 
         st.subheader("Users Registered Over Time")
         if all_users:
-            # Convert to DataFrame and ensure 'created_at' is datetime
             users_df = pd.DataFrame(all_users)
-            # --- DEBUGGING: Display the DataFrame to check parsed dates ---
-            # st.write("DEBUG: Users DataFrame (raw):")
-            # st.dataframe(users_df)
 
             if 'created_at' in users_df.columns and not users_df['created_at'].empty:
-                # Attempt to convert, handle errors by coercing invalid dates to NaT
                 users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
-                
-                # Drop rows where created_at_dt is NaT (failed conversions)
                 users_df = users_df.dropna(subset=['created_at_dt'])
 
                 if not users_df.empty:
-                    # Decide on granularity: if data spans multiple days, group by date.
-                    # If all data is on the same day, group by hour for better visibility.
                     min_date = users_df['created_at_dt'].min().date()
                     max_date = users_df['created_at_dt'].max().date()
 
                     if min_date == max_date:
-                        # All data on the same day, group by hour
-                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') # Group by hour
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') 
                         x_axis_label = 'Hour of Day'
-                        # tickformat = '%H:%M' # Removed tickformat for bar chart
                     else:
-                        # Data spans multiple days, group by date
                         users_df['registration_period'] = users_df['created_at_dt'].dt.date
                         x_axis_label = 'Date'
-                        # tickformat = '%Y-%m-%d' # Removed tickformat for bar chart
 
-                    # Group by period and count users
                     users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
                     users_over_time = users_over_time.sort_values('registration_period')
 
-                    # --- DEBUGGING: Display aggregated DataFrame for plotting ---
-                    # st.write("DEBUG: Users Aggregated Data for Plotting:")
-                    # st.dataframe(users_over_time)
-
-                    # Changed from px.line to px.bar for better comprehension with sparse data
                     fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
                                              title='Users Registered Over Time',
                                              labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
                                              color_discrete_sequence=['purple'],
-                                             text='count') # Show count directly on bars
-                    fig_users_time.update_traces(textposition='outside') # Position text outside bars
-                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') # Text sizing
-                    # fig_users_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) # Removed rangeslider for bar chart
+                                             text='count') 
+                    fig_users_time.update_traces(textposition='outside') 
+                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
                     st.plotly_chart(fig_users_time, use_container_width=True)
                 else:
                     st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
@@ -374,7 +337,7 @@ else: # User is authenticated as admin
     elif page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
         
-        all_documents = fetch_documents() 
+        all_documents = fetch_documents(st.session_state.access_token) # Pass token
         
         if 'unique_user_ids' not in st.session_state:
             st.session_state.unique_user_ids = sorted(list({str(doc['user_id']) for doc in all_documents}))
@@ -487,7 +450,7 @@ else: # User is authenticated as admin
                 st.session_state.sort_order_users = 'desc' if st.session_state.sort_order_users == 'asc' else 'asc'
                 st.rerun()
         
-        users = fetch_users() # Call the now globally defined function
+        users = fetch_users(st.session_state.access_token) # Pass token
         
         if users:
             if 'sorted_users' not in st.session_state or st.session_state.sort_order_users != st.session_state.get('_prev_sort_order_users', None):
