@@ -16,107 +16,11 @@ load_dotenv()
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000") # Added default for robustness
 
 # Import the utility function to wait for the backend
-from app_utils import wait_for_backend 
+from app_utils import *
 
 # --- Streamlit Page Configuration ---
-# Setting a wider layout and initial sidebar state for better aesthetics
-st.set_page_config(
-    page_title="Admin Dashboard - SmartDoc AI", 
-    layout="wide", 
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'mailto:support@smartdoc.ai',
-        'Report a bug': 'mailto:bugs@smartdoc.ai',
-        'About': '# SmartDoc AI Admin Dashboard. This is an internal tool.'
-    }
-)
-
+st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
 st.title("🛠 Admin Dashboard - SmartDoc AI")
-
-# --- Custom CSS for aesthetic improvements ---
-st.markdown(
-    """
-    <style>
-    /* General body styling for a soft background */
-    body {
-        background: linear-gradient(to right, #f0f2f6, #e0e5ec);
-    }
-    
-    /* Customizing Streamlit components for a card-like appearance */
-    .stApp {
-        background: linear-gradient(to right, #f0f2f6, #e0e5ec);
-    }
-    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        font-size: 1.1rem;
-    }
-    
-    /* Card-like containers for sections */
-    .stContainer {
-        background-color: #ffffff; /* White background for cards */
-        border-radius: 15px; /* Rounded corners */
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    
-    /* Enhance specific Streamlit elements like buttons */
-    .stButton>button {
-        border-radius: 10px;
-        border: 1px solid #4CAF50; /* Green border */
-        color: white;
-        background-color: #4CAF50; /* Green background */
-        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-        transition: all 0.3s ease-in-out; /* Smooth transition for hover */
-    }
-    .stButton>button:hover {
-        background-color: #45a049; /* Darker green on hover */
-        box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3);
-        transform: translateY(-2px); /* Slight lift effect */
-    }
-    
-    /* Styling for primary buttons (like Delete/Confirm) */
-    .stButton>button.primary-button {
-        background-color: #FF6347; /* Tomato red */
-        border-color: #FF6347;
-    }
-    .stButton>button.primary-button:hover {
-        background-color: #E5533D; /* Darker red on hover */
-    }
-    
-    /* Adjust markdown headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: #2c3e50; /* Darker text for headings */
-        font-family: 'Segoe UI', sans-serif;
-    }
-    
-    /* Info/Success/Error banners */
-    div.stAlert {
-        border-radius: 10px;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg { /* This is a common class for the sidebar background */
-        background-color: #f8f9fa; /* Lighter sidebar background */
-        border-right: 1px solid #e0e0e0;
-    }
-
-    /* Style for metric labels */
-    div[data-testid="stMetric"] label {
-        font-size: 1.1em;
-        color: #333;
-    }
-    /* Style for metric values */
-    div[data-testid="stMetric"] div[data-testid="stMarkdownContainer"] {
-        font-size: 2em;
-        font-weight: bold;
-        color: #1a73e8; /* A nice blue for values */
-    }
-    
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 
 # --- Initialize Session State Variables (Important for Reruns) ---
 if 'access_token' not in st.session_state:
@@ -143,44 +47,7 @@ if 'backend_reachable' not in st.session_state: # Initialize backend reachable s
     st.session_state.backend_reachable = False
 
 
-# --- Function to get authorization header for API requests ---
-def get_auth_header():
-    if not st.session_state.access_token:
-        return None
-    return {"Authorization": f"Bearer {st.session_state.access_token}"}
 
-# --- Function to verify if the logged-in user has admin access ---
-def verify_admin_access():
-    headers = get_auth_header()
-    if not headers:
-        st.session_state.is_admin = False
-        return False
-    try:
-        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
-        if response.status_code == 200:
-            st.session_state.is_admin = True
-            return True
-        elif response.status_code == 403:
-            st.error(f"Access denied: {response.json().get('detail', 'Not an admin')}")
-            st.session_state.is_admin = False
-            return False
-        elif response.status_code == 401:
-             st.error("Authentication failed. Please log in again.")
-             st.session_state.access_token = None
-             st.session_state.is_admin = False
-             return False
-        else:
-            st.error(f"Error verifying admin access: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
-            st.session_state.is_admin = False
-            return False
-    except requests.exceptions.ConnectionError:
-        st.error("Network error: Could not connect to the backend API during admin verification. Please ensure the backend is running.")
-        st.session_state.is_admin = False
-        return False
-    except Exception as e:
-        st.error(f"An unexpected error occurred during admin verification: {e}")
-        st.session_state.is_admin = False
-        return False
 
 # --- Backend Connection Check with Spinner and Disappearing Message (moved to top-level conditional) ---
 # This block runs only once per full app load or if backend_reachable is reset (e.g., on logout)
@@ -189,68 +56,13 @@ if not st.session_state.backend_reachable:
     with st.spinner("Attempting to connect to the backend API..."):
         if wait_for_backend():
             success_message_placeholder = st.empty()
-            success_message_placeholder.success("Successfully connected to the backend API! 🎉")
+            success_message_placeholder.success("Successfully connected to the backend API!")
             time.sleep(1)
             success_message_placeholder.empty()
             st.session_state.backend_reachable = True # Mark backend as reachable
         else:
-            st.error("Failed to connect to the backend API. Please ensure the backend is running. 😞")
+            st.error("Failed to connect to the backend API. Please ensure the backend is running.")
             st.stop() # Stop the Streamlit app if backend is not reachable
-
-
-# --- Admin Login Function ---
-def admin_login():
-    # Display login form only if backend is reachable (confirmed by the above block)
-    if st.session_state.get('backend_reachable', False):
-        st.markdown("<h3 style='text-align: center; color: #34495e;'>Admin Login</h3>", unsafe_allow_html=True)
-        st.markdown("<hr style='border: 1px solid #ddd;'>", unsafe_allow_html=True)
-
-        with st.form("login_form", clear_on_submit=False):
-            email = st.text_input("Email", key="login_email")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Login ✨") # Added emoji to button
-            
-            if submitted:
-                if not email or not password:
-                    st.error("Please enter both email and password.")
-                else:
-                    try:
-                        login_response = requests.post(
-                            f"{BACKEND_API_URL}/auth/token",
-                            data={"username": email.lower(), "password": password} # Normalize email here too
-                        )
-                        
-                        if login_response.status_code == 200:
-                            token_data = login_response.json()
-                            st.session_state.access_token = token_data.get("access_token")
-                            st.session_state.token_type = token_data.get("token_type")
-                            st.session_state.user_id = token_data.get("user_id")
-                            st.session_state.username = token_data.get("username")
-
-                            if verify_admin_access():
-                                st.success("Admin login successful! Redirecting to dashboard... 🚀") 
-                                st.rerun() 
-                            else:
-                                st.error("Logged in, but this account does not have administrator privileges. 🚫")
-                                st.session_state.access_token = None # Clear token if not admin
-                                st.session_state.is_admin = False
-                        elif login_response.status_code == 401:
-                            error_detail = login_response.json().get("detail", "").lower()
-                            if "gemini api key is missing" in error_detail:
-                                st.error("Gemini API key is missing. Please update your profile with a valid key. 🔑")
-                            elif "your gemini api key is invalid" in error_detail:
-                                st.error("Your Gemini API key is invalid. Please update your key or contact support. ❌")
-                            elif "incorrect email or password" in error_detail:
-                                st.error("Incorrect email or password. 😔")
-                            else:
-                                st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')}")
-                        else:
-                            st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')} 😢")
-                    except requests.exceptions.ConnectionError:
-                        st.error("Could not connect to the API. Please ensure the backend is running. 🔌")
-                    except Exception as e:
-                        st.error(f"An unexpected error occurred during login: {e} 🐛")
-    st.stop() # Stop execution if we're in the login state
 
 
 # --- Data Fetching Functions (Moved to top-level for consistent definition) ---
@@ -317,7 +129,7 @@ else: # User is authenticated as admin
         st.cache_data.clear() # Clear ALL st.cache_data for functions in this script
         st.cache_resource.clear() # Clear st.cache_resource as well if used
 
-        st.success("You have been logged out successfully. 👋")
+        st.success("You have been logged out successfully.")
         time.sleep(1)
         st.rerun() # Force rerun to go back to login screen
 
@@ -330,190 +142,124 @@ else: # User is authenticated as admin
         all_documents = fetch_documents(st.session_state.access_token)
         all_users = fetch_users(st.session_state.access_token)
 
-        # Use a container for the Key Metrics section to apply styling
-        with st.container():
-            st.subheader("Key Metrics 📈")
-            col1, col2 = st.columns(2) 
-            with col1:
-                st.metric(label="Total Users", value=len(all_users))
-                st.metric(label="Total Documents", value=len(all_documents)) 
+        st.subheader("Key Metrics")
+        col1, col2 = st.columns(2) 
+        with col1:
+            st.metric(label="Total Users", value=len(all_users))
+            st.metric(label="Total Documents", value=len(all_documents)) 
+        
+        # Calculate vectorized vs. non-vectorized documents
+        vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
+        non_vectorized_count = len(all_documents) - vectorized_count # Corrected variable name
+        
+        with col2: 
+            st.metric(label="Vectorized Docs", value=vectorized_count)
+            st.metric(label="Non-Vectorized Docs", value=non_vectorized_count)
+
+
+        st.subheader("Document Status Distribution")
+        if all_documents:
+            doc_status_data = pd.DataFrame({
+                'Status': ['Vectorized', 'Non-Vectorized'],
+                'Count': [vectorized_count, non_vectorized_count] # Corrected variable name here
+            })
+            fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
+                                    title='Document Vectorization Status',
+                                    color_discrete_sequence=px.colors.sequential.RdBu)
+            st.plotly_chart(fig_doc_status, use_container_width=True)
+        else:
+            st.info("No document data to display status distribution.")
+
+        # --- NEW: Document Summarization Status ---
+        st.subheader("Document Summarization Status")
+        if all_documents:
+            # Check if summary is None or an empty string, or "None", "null" (from JSON string conversion)
+            summarized_count = sum(1 for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""])
+            not_summarized_count = len(all_documents) - summarized_count
             
-            # Calculate vectorized vs. non-vectorized documents
-            vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-            non_vectorized_count = len(all_documents) - vectorized_count 
+            doc_summary_data = pd.DataFrame({
+                'Status': ['Summarized', 'Not Summarized'],
+                'Count': [summarized_count, not_summarized_count]
+            })
+            fig_doc_summary = px.pie(doc_summary_data, values='Count', names='Status', 
+                                    title='Document Summarization Status',
+                                    color_discrete_sequence=px.colors.qualitative.G10) # Using a different color sequence
+            st.plotly_chart(fig_doc_summary, use_container_width=True)
+        else:
+            st.info("No document data to display summarization status.")
+
+        st.subheader("Documents Uploaded Over Time")
+        if all_documents:
+            docs_df = pd.DataFrame(all_documents)
             
-            with col2: 
-                st.metric(label="Vectorized Docs", value=vectorized_count)
-                st.metric(label="Non-Vectorized Docs", value=non_vectorized_count)
+            if 'upload_time' in docs_df.columns and not docs_df['upload_time'].empty:
+                docs_df['upload_time_dt'] = pd.to_datetime(docs_df['upload_time'], errors='coerce')
+                docs_df = docs_df.dropna(subset=['upload_time_dt'])
 
-        with st.container():
-            st.subheader("Document Status Distribution 📊")
-            if all_documents:
-                doc_status_data = pd.DataFrame({
-                    'Status': ['Vectorized', 'Non-Vectorized'],
-                    'Count': [vectorized_count, non_vectorized_count] 
-                })
-                fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
-                                        title='Document Vectorization Status',
-                                        color_discrete_sequence=px.colors.sequential.RdBu)
-                st.plotly_chart(fig_doc_status, use_container_width=True)
-            else:
-                st.info("No document data to display status distribution.")
+                if not docs_df.empty:
+                    min_date = docs_df['upload_time_dt'].min().date()
+                    max_date = docs_df['upload_time_dt'].max().date()
 
-        with st.container():
-            # --- NEW: Document Summarization Status ---
-            st.subheader("Document Summarization Status 📝")
-            if all_documents:
-                # Check if summary is None or an empty string, or "None", "null" (from JSON string conversion)
-                summarized_count = sum(1 for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""])
-                not_summarized_count = len(all_documents) - summarized_count
-                
-                doc_summary_data = pd.DataFrame({
-                    'Status': ['Summarized', 'Not Summarized'],
-                    'Count': [summarized_count, not_summarized_count]
-                })
-                fig_doc_summary = px.pie(doc_summary_data, values='Count', names='Status', 
-                                        title='Document Summarization Status',
-                                        color_discrete_sequence=px.colors.qualitative.G10) 
-                st.plotly_chart(fig_doc_summary, use_container_width=True)
-            else:
-                st.info("No document data to display summarization status.")
-
-        with st.container():
-            st.subheader("Documents Uploaded Over Time ⏳")
-            if all_documents:
-                docs_df = pd.DataFrame(all_documents)
-                
-                if 'upload_time' in docs_df.columns and not docs_df['upload_time'].empty:
-                    docs_df['upload_time_dt'] = pd.to_datetime(docs_df['upload_time'], errors='coerce')
-                    docs_df = docs_df.dropna(subset=['upload_time_dt'])
-
-                    if not docs_df.empty:
-                        min_date = docs_df['upload_time_dt'].min().date()
-                        max_date = docs_df['upload_time_dt'].max().date()
-
-                        if min_date == max_date:
-                            docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') 
-                            x_axis_label = 'Hour of Day'
-                        else:
-                            docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
-                            x_axis_label = 'Date'
-
-                        docs_over_time = docs_df.groupby('upload_period').size().reset_index(name='count')
-                        docs_over_time = docs_over_time.sort_values('upload_period')
-
-                        fig_docs_time = px.bar(docs_over_time, x='upload_period', y='count', 
-                                                title='Documents Uploaded Over Time',
-                                                labels={'upload_period': x_axis_label, 'count': 'Number of Documents'},
-                                                text='count') 
-                        fig_docs_time.update_traces(textposition='outside') 
-                        fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
-                        st.plotly_chart(fig_docs_time, use_container_width=True)
+                    if min_date == max_date:
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') 
+                        x_axis_label = 'Hour of Day'
                     else:
-                        st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
+                        x_axis_label = 'Date'
+
+                    docs_over_time = docs_df.groupby('upload_period').size().reset_index(name='count')
+                    docs_over_time = docs_over_time.sort_values('upload_period')
+
+                    fig_docs_time = px.bar(docs_over_time, x='upload_period', y='count', 
+                                            title='Documents Uploaded Over Time',
+                                            labels={'upload_period': x_axis_label, 'count': 'Number of Documents'},
+                                            text='count') 
+                    fig_docs_time.update_traces(textposition='outside') 
+                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
+                    st.plotly_chart(fig_docs_time, use_container_width=True)
                 else:
-                    st.info("Document data missing 'upload_time' or is empty for trend analysis.")
+                    st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
             else:
-                st.info("No document data to display upload trends.")
+                st.info("Document data missing 'upload_time' or is empty for trend analysis.")
+        else:
+            st.info("No document data to display upload trends.")
 
-        with st.container():
-            st.subheader("Users Registered Over Time 🧑‍💻")
-            if all_users:
-                users_df = pd.DataFrame(all_users)
+        st.subheader("Users Registered Over Time")
+        if all_users:
+            users_df = pd.DataFrame(all_users)
 
-                if 'created_at' in users_df.columns and not users_df['created_at'].empty:
-                    users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
-                    users_df = users_df.dropna(subset=['created_at_dt'])
+            if 'created_at' in users_df.columns and not users_df['created_at'].empty:
+                users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
+                users_df = users_df.dropna(subset=['created_at_dt'])
 
-                    if not users_df.empty:
-                        min_date = users_df['created_at_dt'].min().date()
-                        max_date = users_df['created_at_dt'].max().date()
+                if not users_df.empty:
+                    min_date = users_df['created_at_dt'].min().date()
+                    max_date = users_df['created_at_dt'].max().date()
 
-                        if min_date == max_date:
-                            users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') 
-                            x_axis_label = 'Hour of Day'
-                        else:
-                            users_df['registration_period'] = users_df['created_at_dt'].dt.date
-                            x_axis_label = 'Date'
-
-                        users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
-                        users_over_time = users_over_time.sort_values('registration_period')
-
-                        fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
-                                                 title='Users Registered Over Time',
-                                                 labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
-                                                 color_discrete_sequence=['purple'],
-                                                 text='count') 
-                        fig_users_time.update_traces(textposition='outside') 
-                        fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
-                        st.plotly_chart(fig_users_time, use_container_width=True)
+                    if min_date == max_date:
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') 
+                        x_axis_label = 'Hour of Day'
                     else:
-                        st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.date
+                        x_axis_label = 'Date'
+
+                    users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
+                    users_over_time = users_over_time.sort_values('registration_period')
+
+                    fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
+                                             title='Users Registered Over Time',
+                                             labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
+                                             color_discrete_sequence=['purple'],
+                                             text='count') 
+                    fig_users_time.update_traces(textposition='outside') 
+                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
+                    st.plotly_chart(fig_users_time, use_container_width=True)
                 else:
-                    st.info("User data missing 'created_at' or is empty for trend analysis.")
+                    st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
             else:
-                st.info("No user data to display registration trends.")
-
-
-        with st.container():
-            # --- NEW: Most Active Users (by Document Count) ---
-            st.subheader("Most Active Users (by Document Count) 🚀")
-            if all_documents and all_users:
-                doc_counts_per_user = {}
-                for doc in all_documents:
-                    user_id = str(doc.get('user_id'))
-                    if user_id: # Ensure user_id is not None
-                        doc_counts_per_user[user_id] = doc_counts_per_user.get(user_id, 0) + 1
-                
-                # Create a DataFrame for plotting
-                if doc_counts_per_user:
-                    active_users_df = pd.DataFrame(doc_counts_per_user.items(), columns=['user_id', 'document_count'])
-                    active_users_df = active_users_df.sort_values('document_count', ascending=False).head(5) # Top 5
-                    
-                    # Map user_id to username for better readability
-                    user_id_to_username = {user['id']: user['username'] for user in all_users}
-                    active_users_df['username'] = active_users_df['user_id'].map(user_id_to_username).fillna('Unknown User')
-
-                    fig_active_users = px.bar(active_users_df, x='username', y='document_count',
-                                                title='Top 5 Users by Documents Uploaded',
-                                                labels={'username': 'User', 'document_count': 'Number of Documents'},
-                                                color='document_count', # Color bars by count
-                                                color_continuous_scale=px.colors.sequential.Viridis,
-                                                text='document_count')
-                    fig_active_users.update_traces(textposition='outside')
-                    fig_active_users.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
-                    st.plotly_chart(fig_active_users, use_container_width=True)
-                else:
-                    st.info("No documents uploaded or user data available to determine active users.")
-            else:
-                st.info("Not enough data to determine active users (either no documents or no users fetched).")
-
-        with st.container():
-            # --- NEW: Top Summarized Documents ---
-            st.subheader("Top Summarized Documents ✨")
-            if all_documents:
-                summarized_docs = [doc for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""]]
-                
-                if summarized_docs:
-                    # Sort by length of summary (as a proxy for "richness" of summarization)
-                    # Or by upload_time if you prefer "most recent summarized"
-                    top_docs = sorted(summarized_docs, key=lambda x: len(x['summary']) if x['summary'] else 0, reverse=True)[:5] # Top 5 by summary length
-
-                    st.write("Here are some of the top summarized documents:")
-                    for i, doc in enumerate(top_docs):
-                        with st.expander(f"{i+1}. {doc['filename']} (Summarized by {next((u['username'] for u in all_users if str(u['id']) == str(doc['user_id'])), 'Unknown User')})"):
-                            st.markdown(f"**Document ID:** `{doc['id']}`")
-                            st.markdown(f"**Filename:** `{doc['filename']}`")
-                            st.markdown(f"**File Type:** `{doc['file_type']}`")
-                            st.markdown(f"**Upload Time:** `{doc['upload_time']}`")
-                            st.markdown(f"**Vectorized:** {'✅ Yes' if doc.get('is_vectorized') else '❌ No'}")
-                            st.markdown("---")
-                            st.markdown("**AI-Generated Summary:**")
-                            st.info(doc['summary'])
-                else:
-                    st.info("No summarized documents found yet.")
-            else:
-                st.info("No document data available to display top summarized documents.")
+                st.info("User data missing 'created_at' or is empty for trend analysis.")
+        else:
+            st.info("No user data to display registration trends.")
 
 
     # --- Documents Page ---
