@@ -130,7 +130,7 @@ def admin_login():
 
                             if verify_admin_access():
                                 st.success("Admin login successful! Redirecting to dashboard...")
-                                st.rerun()
+                                st.rerun() 
                             else:
                                 st.error("Logged in, but this account does not have administrator privileges.")
                                 st.session_state.access_token = None # Clear token if not admin
@@ -218,6 +218,7 @@ else: # User is authenticated as admin
         time.sleep(1)
         st.rerun() # Force rerun to go back to login screen
 
+
     # --- Dashboard Page ---
     elif page == "📊 Dashboard":
         st.header("📊 Admin Dashboard Overview")
@@ -227,17 +228,16 @@ else: # User is authenticated as admin
         all_users = fetch_users()
 
         st.subheader("Key Metrics")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2) # Changed to 2 columns as one metric is removed
         with col1:
             st.metric(label="Total Users", value=len(all_users))
-        with col2:
-            st.metric(label="Total Documents", value=len(all_documents))
+            st.metric(label="Total Documents", value=len(all_documents)) # Moved to first column
         
         # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
         non_vectorized_count = len(all_documents) - vectorized_count
         
-        with col3:
+        with col2: # Moved to second column
             st.metric(label="Vectorized Docs", value=vectorized_count)
             st.metric(label="Non-Vectorized Docs", value=non_vectorized_count)
 
@@ -255,37 +255,60 @@ else: # User is authenticated as admin
         else:
             st.info("No document data to display status distribution.")
 
-        st.subheader("User Role Distribution")
-        if all_users:
-            admin_count = sum(1 for user in all_users if user.get('is_admin'))
-            regular_user_count = len(all_users) - admin_count
-            
-            user_role_data = pd.DataFrame({
-                'Role': ['Admin', 'Regular User'],
-                'Count': [admin_count, regular_user_count]
-            })
-            fig_user_roles = px.pie(user_role_data, values='Count', names='Role', 
-                                    title='User Role Distribution',
-                                    color_discrete_sequence=px.colors.qualitative.Pastel)
-            st.plotly_chart(fig_user_roles, use_container_width=True)
-        else:
-            st.info("No user data to display role distribution.")
-
         st.subheader("Documents Uploaded Over Time")
         if all_documents:
             # Convert to DataFrame and ensure 'upload_time' is datetime
             docs_df = pd.DataFrame(all_documents)
-            docs_df['upload_date'] = pd.to_datetime(docs_df['upload_time']).dt.date
             
-            # Group by date and count documents
-            docs_over_time = docs_df.groupby('upload_date').size().reset_index(name='count')
-            docs_over_time = docs_over_time.sort_values('upload_date')
+            # --- DEBUGGING: Display the DataFrame to check parsed dates ---
+            # st.write("DEBUG: Docs DataFrame (raw):")
+            # st.dataframe(docs_df) # Show the DataFrame as received from API
+            
+            if 'upload_time' in docs_df.columns and not docs_df['upload_time'].empty:
+                # Attempt to convert, handle errors by coercing invalid dates to NaT
+                docs_df['upload_time_dt'] = pd.to_datetime(docs_df['upload_time'], errors='coerce')
+                
+                # Drop rows where upload_time_dt is NaT (failed conversions)
+                docs_df = docs_df.dropna(subset=['upload_time_dt'])
 
-            fig_docs_time = px.line(docs_over_time, x='upload_date', y='count', 
-                                    title='Documents Uploaded Over Time',
-                                    labels={'upload_date': 'Date', 'count': 'Number of Documents'})
-            fig_docs_time.update_xaxes(rangeslider_visible=True) # Add rangeslider for better navigation
-            st.plotly_chart(fig_docs_time, use_container_width=True)
+                # --- DEBUGGING: Display DataFrame after datetime conversion and NaT drop ---
+                # st.write("DEBUG: Docs DataFrame (after datetime conversion and NaT drop):")
+                # st.dataframe(docs_df[['upload_time', 'upload_time_dt']])
+
+                if not docs_df.empty:
+                    # Decide on granularity: if data spans multiple days, group by date.
+                    # If all data is on the same day, group by hour for better visibility.
+                    min_date = docs_df['upload_time_dt'].min().date()
+                    max_date = docs_df['upload_time_dt'].max().date()
+
+                    if min_date == max_date:
+                        # All data on the same day, group by hour
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') # Group by hour
+                        x_axis_label = 'Hour of Day'
+                        tickformat = '%H:%M'
+                    else:
+                        # Data spans multiple days, group by date
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
+                        x_axis_label = 'Date'
+                        tickformat = '%Y-%m-%d'
+
+                    # Group by period and count documents
+                    docs_over_time = docs_df.groupby('upload_period').size().reset_index(name='count')
+                    docs_over_time = docs_over_time.sort_values('upload_period')
+
+                    # --- DEBUGGING: Display aggregated DataFrame for plotting ---
+                    # st.write("DEBUG: Docs Aggregated Data for Plotting:")
+                    # st.dataframe(docs_over_time)
+
+                    fig_docs_time = px.line(docs_over_time, x='upload_period', y='count', 
+                                            title='Documents Uploaded Over Time',
+                                            labels={'upload_period': x_axis_label, 'count': 'Number of Documents'})
+                    fig_docs_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) 
+                    st.plotly_chart(fig_docs_time, use_container_width=True)
+                else:
+                    st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
+            else:
+                st.info("Document data missing 'upload_time' or is empty for trend analysis.")
         else:
             st.info("No document data to display upload trends.")
 
@@ -293,27 +316,65 @@ else: # User is authenticated as admin
         if all_users:
             # Convert to DataFrame and ensure 'created_at' is datetime
             users_df = pd.DataFrame(all_users)
-            users_df['registration_date'] = pd.to_datetime(users_df['created_at']).dt.date
-            
-            # Group by date and count users
-            users_over_time = users_df.groupby('registration_date').size().reset_index(name='count')
-            users_over_time = users_over_time.sort_values('registration_date')
+            # --- DEBUGGING: Display the DataFrame to check parsed dates ---
+            # st.write("DEBUG: Users DataFrame (raw):")
+            # st.dataframe(users_df)
 
-            fig_users_time = px.line(users_over_time, x='registration_date', y='count', 
-                                     title='Users Registered Over Time',
-                                     labels={'registration_date': 'Date', 'count': 'Number of Users'},
-                                     color_discrete_sequence=['purple'])
-            fig_users_time.update_xaxes(rangeslider_visible=True) # Add rangeslider
-            st.plotly_chart(fig_users_time, use_container_width=True)
+            if 'created_at' in users_df.columns and not users_df['created_at'].empty:
+                # Attempt to convert, handle errors by coercing invalid dates to NaT
+                users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
+                
+                # Drop rows where created_at_dt is NaT (failed conversions)
+                users_df = users_df.dropna(subset=['created_at_dt'])
+
+                # --- DEBUGGING: Display DataFrame after datetime conversion and NaT drop ---
+                # st.write("DEBUG: Users DataFrame (after datetime conversion and NaT drop):")
+                # st.dataframe(users_df[['created_at', 'created_at_dt']])
+
+                if not users_df.empty:
+                    # Decide on granularity: if data spans multiple days, group by date.
+                    # If all data is on the same day, group by hour for better visibility.
+                    min_date = users_df['created_at_dt'].min().date()
+                    max_date = users_df['created_at_dt'].max().date()
+
+                    if min_date == max_date:
+                        # All data on the same day, group by hour
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') # Group by hour
+                        x_axis_label = 'Hour of Day'
+                        tickformat = '%H:%M'
+                    else:
+                        # Data spans multiple days, group by date
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.date
+                        x_axis_label = 'Date'
+                        tickformat = '%Y-%m-%d'
+
+                    # Group by period and count users
+                    users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
+                    users_over_time = users_over_time.sort_values('registration_period')
+
+                    # --- DEBUGGING: Display aggregated DataFrame for plotting ---
+                    # st.write("DEBUG: Users Aggregated Data for Plotting:")
+                    # st.dataframe(users_over_time)
+
+                    fig_users_time = px.line(users_over_time, x='registration_period', y='count', 
+                                             title='Users Registered Over Time',
+                                             labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
+                                             color_discrete_sequence=['purple'])
+                    fig_users_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) 
+                    st.plotly_chart(fig_users_time, use_container_width=True)
+                else:
+                    st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
+            else:
+                st.info("User data missing 'created_at' or is empty for trend analysis.")
         else:
             st.info("No user data to display registration trends.")
 
 
     # --- Documents Page ---
-    elif page == "📄 Documents": # Renamed to avoid conflict, keeping for existing functionality
+    elif page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
         
-        all_documents = fetch_documents() # Call the now globally defined function
+        all_documents = fetch_documents() 
         
         if 'unique_user_ids' not in st.session_state:
             st.session_state.unique_user_ids = sorted(list({str(doc['user_id']) for doc in all_documents}))
@@ -459,7 +520,7 @@ else: # User is authenticated as admin
             user_data_display = []
             for user in current_users:
                 user_data_display.append({
-                    "ID": user['id'],
+                    "ID": str(user['id']), # Ensure UUID is converted to string for display
                     "Username": user['username'],
                     "Email": user['email'],
                     "Role": '👑 Admin' if bool(int(user.get('is_admin', 0))) else '👤 User',
