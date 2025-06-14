@@ -12,15 +12,24 @@ BACKEND_API_URL = os.getenv("BACKEND_API_URL")
 from app_utils import wait_for_backend 
 
 
+# Use st.spinner for the connection attempt
+with st.spinner("Attempting to connect to the backend API..."):
+    if wait_for_backend():
+        # The spinner automatically disappears here once wait_for_backend completes.
 
+        # Create a placeholder for the success message
+        success_message_placeholder = st.empty()
+        success_message_placeholder.success("Successfully connected to the backend API!")
 
+        # Make the success message disappear after 1 second
+        time.sleep(1)
+        success_message_placeholder.empty()
 
-st.info("Attempting to connect to the backend API...")
-if wait_for_backend():
-    st.success("Successfully connected to the backend API!")
-else:
-    st.error("Failed to connect to the backend API. Please ensure the backend is running.")
-    st.stop() # Stop the Streamlit app if backend is not reachable
+    else:
+        # The spinner automatically disappears here.
+        # Show an error message if connection fails (this message will remain)
+        st.error("Failed to connect to the backend API. Please ensure the backend is running.")
+        st.stop() # Stop the Streamlit app if backend is not reachable
 
 st.sidebar.header("Navigation")
 page = st.sidebar.radio("Go to", ["📄 Documents", "👤 Users"])
