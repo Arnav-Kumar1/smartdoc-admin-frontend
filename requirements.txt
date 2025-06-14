@@ -1,3 +1,5 @@
 streamlit
 requests
 dotenv
+pandas
+plotly
