@@ -271,10 +271,6 @@ else: # User is authenticated as admin
                 # Drop rows where upload_time_dt is NaT (failed conversions)
                 docs_df = docs_df.dropna(subset=['upload_time_dt'])
 
-                # --- DEBUGGING: Display DataFrame after datetime conversion and NaT drop ---
-                # st.write("DEBUG: Docs DataFrame (after datetime conversion and NaT drop):")
-                # st.dataframe(docs_df[['upload_time', 'upload_time_dt']])
-
                 if not docs_df.empty:
                     # Decide on granularity: if data spans multiple days, group by date.
                     # If all data is on the same day, group by hour for better visibility.
@@ -285,12 +281,12 @@ else: # User is authenticated as admin
                         # All data on the same day, group by hour
                         docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') # Group by hour
                         x_axis_label = 'Hour of Day'
-                        tickformat = '%H:%M'
+                        # tickformat = '%H:%M' # Removed tickformat for bar chart
                     else:
                         # Data spans multiple days, group by date
                         docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
                         x_axis_label = 'Date'
-                        tickformat = '%Y-%m-%d'
+                        # tickformat = '%Y-%m-%d' # Removed tickformat for bar chart
 
                     # Group by period and count documents
                     docs_over_time = docs_df.groupby('upload_period').size().reset_index(name='count')
@@ -300,10 +296,14 @@ else: # User is authenticated as admin
                     # st.write("DEBUG: Docs Aggregated Data for Plotting:")
                     # st.dataframe(docs_over_time)
 
-                    fig_docs_time = px.line(docs_over_time, x='upload_period', y='count', 
+                    # Changed from px.line to px.bar for better comprehension with sparse data
+                    fig_docs_time = px.bar(docs_over_time, x='upload_period', y='count', 
                                             title='Documents Uploaded Over Time',
-                                            labels={'upload_period': x_axis_label, 'count': 'Number of Documents'})
-                    fig_docs_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) 
+                                            labels={'upload_period': x_axis_label, 'count': 'Number of Documents'},
+                                            text='count') # Show count directly on bars
+                    fig_docs_time.update_traces(textposition='outside') # Position text outside bars
+                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') # Text sizing
+                    # fig_docs_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) # Removed rangeslider for bar chart
                     st.plotly_chart(fig_docs_time, use_container_width=True)
                 else:
                     st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
@@ -327,10 +327,6 @@ else: # User is authenticated as admin
                 # Drop rows where created_at_dt is NaT (failed conversions)
                 users_df = users_df.dropna(subset=['created_at_dt'])
 
-                # --- DEBUGGING: Display DataFrame after datetime conversion and NaT drop ---
-                # st.write("DEBUG: Users DataFrame (after datetime conversion and NaT drop):")
-                # st.dataframe(users_df[['created_at', 'created_at_dt']])
-
                 if not users_df.empty:
                     # Decide on granularity: if data spans multiple days, group by date.
                     # If all data is on the same day, group by hour for better visibility.
@@ -341,12 +337,12 @@ else: # User is authenticated as admin
                         # All data on the same day, group by hour
                         users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') # Group by hour
                         x_axis_label = 'Hour of Day'
-                        tickformat = '%H:%M'
+                        # tickformat = '%H:%M' # Removed tickformat for bar chart
                     else:
                         # Data spans multiple days, group by date
                         users_df['registration_period'] = users_df['created_at_dt'].dt.date
                         x_axis_label = 'Date'
-                        tickformat = '%Y-%m-%d'
+                        # tickformat = '%Y-%m-%d' # Removed tickformat for bar chart
 
                     # Group by period and count users
                     users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
@@ -356,11 +352,15 @@ else: # User is authenticated as admin
                     # st.write("DEBUG: Users Aggregated Data for Plotting:")
                     # st.dataframe(users_over_time)
 
-                    fig_users_time = px.line(users_over_time, x='registration_period', y='count', 
+                    # Changed from px.line to px.bar for better comprehension with sparse data
+                    fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
                                              title='Users Registered Over Time',
                                              labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
-                                             color_discrete_sequence=['purple'])
-                    fig_users_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) 
+                                             color_discrete_sequence=['purple'],
+                                             text='count') # Show count directly on bars
+                    fig_users_time.update_traces(textposition='outside') # Position text outside bars
+                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') # Text sizing
+                    # fig_users_time.update_xaxes(rangeslider_visible=True, tickformat=tickformat) # Removed rangeslider for bar chart
                     st.plotly_chart(fig_users_time, use_container_width=True)
                 else:
                     st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
