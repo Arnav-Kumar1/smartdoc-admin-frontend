@@ -31,8 +31,31 @@ with st.spinner("Attempting to connect to the backend API..."):
         st.error("Failed to connect to the backend API. Please ensure the backend is running.")
         st.stop() # Stop the Streamlit app if backend is not reachable
 
-st.sidebar.header("Navigation")
-page = st.sidebar.radio("Go to", ["📄 Documents", "👤 Users"])
+# --- Navigation Panel ---
+    st.sidebar.header("Navigation")
+    page = st.sidebar.radio("Go to", ["📄 Documents", "👤 Users", "➡️ Logout"])
+
+    # --- Logout Logic ---
+    if page == "➡️ Logout":
+        st.session_state.access_token = None # Clear the authentication token
+        st.session_state.is_admin = False    # Reset admin status
+        st.session_state.user_id = None      # Clear user ID
+        st.session_state.username = None     # Clear username
+
+        # Clear any cached data or other sensitive session state variables
+        # Use .pop() with a default to avoid KeyError if the key doesn't exist
+        st.session_state.pop('unique_user_ids', None)
+        st.session_state.pop('sorted_users', None)
+        st.session_state.pop('documents_cache', None) # If you have a specific documents cache
+
+        # If you use st.cache_data or st.cache_resource extensively,
+        # you might want to clear the entire cache for a clean slate, but use sparingly.
+        st.cache_data.clear()
+        st.cache_resource.clear()
+
+        st.success("You have been logged out successfully.")
+        time.sleep(1) # Give user a moment to see the message
+        st.rerun() # Forces a rerun, which will lead to the login screen
 
 def get_auth_header():
     if 'access_token' not in st.session_state:
