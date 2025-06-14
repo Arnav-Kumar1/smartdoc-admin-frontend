@@ -239,7 +239,7 @@ else: # User is authenticated as admin
         
         # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-        non_vectorized_count = len(all_documents) - vectorized_count
+        non_vectorized_count = len(all_documents) - vectorized_count # Corrected variable name
         
         with col2: 
             st.metric(label="Vectorized Docs", value=vectorized_count)
@@ -250,7 +250,7 @@ else: # User is authenticated as admin
         if all_documents:
             doc_status_data = pd.DataFrame({
                 'Status': ['Vectorized', 'Non-Vectorized'],
-                'Count': [vectorized_count, non_vectorization_count]
+                'Count': [vectorized_count, non_vectorized_count] # Corrected variable name here
             })
             fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
                                     title='Document Vectorization Status',
@@ -262,7 +262,8 @@ else: # User is authenticated as admin
         # --- NEW: Document Summarization Status ---
         st.subheader("Document Summarization Status")
         if all_documents:
-            summarized_count = sum(1 for doc in all_documents if doc.get('summary') not in [None, "None", "null", ""])
+            # Check if summary is None or an empty string, or "None", "null" (from JSON string conversion)
+            summarized_count = sum(1 for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""])
             not_summarized_count = len(all_documents) - summarized_count
             
             doc_summary_data = pd.DataFrame({
