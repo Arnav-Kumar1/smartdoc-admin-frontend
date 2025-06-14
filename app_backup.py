@@ -6,8 +6,6 @@ import os
 import time
 from datetime import datetime
 from dotenv import load_dotenv # Used for loading environment variables locally
-import pandas as pd # Import pandas for data manipulation
-import plotly.express as px # Import plotly for beautiful graphs
 
 # Load environment variables from .env file (for local development)
 load_dotenv()
@@ -130,7 +128,7 @@ def admin_login():
 
                             if verify_admin_access():
                                 st.success("Admin login successful! Redirecting to dashboard...")
-                                st.experimental_rerun()
+                                st.rerun()
                             else:
                                 st.error("Logged in, but this account does not have administrator privileges.")
                                 st.session_state.access_token = None # Clear token if not admin
@@ -197,8 +195,7 @@ if not st.session_state.get('is_admin', False):
     admin_login() # Call login function if not authenticated
 else: # User is authenticated as admin
     st.sidebar.header("Navigation")
-    # Add Dashboard to the navigation panel
-    page = st.sidebar.radio("Go to", ["📊 Dashboard", "📄 Documents", "👤 Users", "➡️ Logout"])
+    page = st.sidebar.radio("Go to", ["📄 Documents", "👤 Users", "➡️ Logout"])
 
     # --- Logout Logic ---
     if page == "➡️ Logout":
@@ -216,101 +213,11 @@ else: # User is authenticated as admin
 
         st.success("You have been logged out successfully.")
         time.sleep(1)
-        st.experimental_rerun() # Force rerun to go back to login screen
-
-    # --- Dashboard Page ---
-    elif page == "📊 Dashboard":
-        st.header("📊 Admin Dashboard Overview")
-        
-        # Fetch all data needed for the dashboard (cached from previous runs)
-        all_documents = fetch_documents()
-        all_users = fetch_users()
-
-        st.subheader("Key Metrics")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label="Total Users", value=len(all_users))
-        with col2:
-            st.metric(label="Total Documents", value=len(all_documents))
-        
-        # Calculate vectorized vs. non-vectorized documents
-        vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-        non_vectorized_count = len(all_documents) - vectorized_count
-        
-        with col3:
-            st.metric(label="Vectorized Docs", value=vectorized_count)
-            st.metric(label="Non-Vectorized Docs", value=non_vectorized_count)
-
-
-        st.subheader("Document Status Distribution")
-        if all_documents:
-            doc_status_data = pd.DataFrame({
-                'Status': ['Vectorized', 'Non-Vectorized'],
-                'Count': [vectorized_count, non_vectorized_count]
-            })
-            fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
-                                    title='Document Vectorization Status',
-                                    color_discrete_sequence=px.colors.sequential.RdBu)
-            st.plotly_chart(fig_doc_status, use_container_width=True)
-        else:
-            st.info("No document data to display status distribution.")
-
-        st.subheader("User Role Distribution")
-        if all_users:
-            admin_count = sum(1 for user in all_users if user.get('is_admin'))
-            regular_user_count = len(all_users) - admin_count
-            
-            user_role_data = pd.DataFrame({
-                'Role': ['Admin', 'Regular User'],
-                'Count': [admin_count, regular_user_count]
-            })
-            fig_user_roles = px.pie(user_role_data, values='Count', names='Role', 
-                                    title='User Role Distribution',
-                                    color_discrete_sequence=px.colors.qualitative.Pastel)
-            st.plotly_chart(fig_user_roles, use_container_width=True)
-        else:
-            st.info("No user data to display role distribution.")
-
-        st.subheader("Documents Uploaded Over Time")
-        if all_documents:
-            # Convert to DataFrame and ensure 'upload_time' is datetime
-            docs_df = pd.DataFrame(all_documents)
-            docs_df['upload_date'] = pd.to_datetime(docs_df['upload_time']).dt.date
-            
-            # Group by date and count documents
-            docs_over_time = docs_df.groupby('upload_date').size().reset_index(name='count')
-            docs_over_time = docs_over_time.sort_values('upload_date')
-
-            fig_docs_time = px.line(docs_over_time, x='upload_date', y='count', 
-                                    title='Documents Uploaded Over Time',
-                                    labels={'upload_date': 'Date', 'count': 'Number of Documents'})
-            fig_docs_time.update_xaxes(rangeslider_visible=True) # Add rangeslider for better navigation
-            st.plotly_chart(fig_docs_time, use_container_width=True)
-        else:
-            st.info("No document data to display upload trends.")
-
-        st.subheader("Users Registered Over Time")
-        if all_users:
-            # Convert to DataFrame and ensure 'created_at' is datetime
-            users_df = pd.DataFrame(all_users)
-            users_df['registration_date'] = pd.to_datetime(users_df['created_at']).dt.date
-            
-            # Group by date and count users
-            users_over_time = users_df.groupby('registration_date').size().reset_index(name='count')
-            users_over_time = users_over_time.sort_values('registration_date')
-
-            fig_users_time = px.line(users_over_time, x='registration_date', y='count', 
-                                     title='Users Registered Over Time',
-                                     labels={'registration_date': 'Date', 'count': 'Number of Users'},
-                                     color_discrete_sequence=['purple'])
-            fig_users_time.update_xaxes(rangeslider_visible=True) # Add rangeslider
-            st.plotly_chart(fig_users_time, use_container_width=True)
-        else:
-            st.info("No user data to display registration trends.")
+        st.rerun() # Force rerun to go back to login screen
 
 
     # --- Documents Page ---
-    elif page == "📄 Documents": # Renamed to avoid conflict, keeping for existing functionality
+    if page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
         
         all_documents = fetch_documents() # Call the now globally defined function
@@ -408,7 +315,7 @@ else: # User is authenticated as admin
                                         del st.session_state.unique_user_ids
                                     st.success("Document deleted successfully!")
                                     st.session_state.doc_page = 1
-                                    st.experimental_rerun()
+                                    st.rerun()
                                 else:
                                     st.error(f"Failed to delete document: {response.json().get('detail', 'Unknown error')}")
                             except Exception as e:
@@ -534,13 +441,13 @@ else: # User is authenticated as admin
                                             st.success("User and all associated documents deleted successfully!")
                                             st.session_state[delete_state_key] = False
                                             st.session_state.user_page = 1
-                                            st.experimental_rerun()
+                                            st.rerun()
                                         else:
                                             st.error(f"Failed to delete user: {response.json().get('detail', 'Unknown error')}")
                                     except Exception as e:
                                         st.error(f"Error: {e}")
                                 if st.button("Cancel", key=f"cancel_del_{user['id']}"):
                                     st.session_state[delete_state_key] = False
-                                    st.experimental_rerun()
+                                    st.rerun()
         else:
             st.info("No users found.")

@@ -10,3 +10,4 @@ __pycache__/
 Dockerfile
 docker-compose*
 README.md
+app_backup
