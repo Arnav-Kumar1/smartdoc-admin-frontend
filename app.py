@@ -201,7 +201,7 @@ else: # User is authenticated as admin
                     max_date = docs_df['upload_time_dt'].max().date()
 
                     if min_date == max_date:
-                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('H') 
+                        docs_df['upload_period'] = docs_df['upload_time_dt'].dt.floor('h') 
                         x_axis_label = 'Hour of Day'
                     else:
                         docs_df['upload_period'] = docs_df['upload_time_dt'].dt.date
@@ -237,7 +237,7 @@ else: # User is authenticated as admin
                     max_date = users_df['created_at_dt'].max().date()
 
                     if min_date == max_date:
-                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('H') 
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('h') 
                         x_axis_label = 'Hour of Day'
                     else:
                         users_df['registration_period'] = users_df['created_at_dt'].dt.date
