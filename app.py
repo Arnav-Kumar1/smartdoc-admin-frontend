@@ -33,7 +33,7 @@ st.set_page_config(
 
 st.title("🛠 Admin Dashboard - SmartDoc AI")
 
-# --- Custom CSS for aesthetic improvements ---
+# --- Custom CSS for aesthetic improvements (from your original preferred app.py) ---
 st.markdown(
     """
     <style>
@@ -228,7 +228,7 @@ def admin_login():
                             st.session_state.username = token_data.get("username")
 
                             if verify_admin_access():
-                                st.success("Admin login successful! Redirecting to dashboard... 🚀") 
+                                st.success("Admin login successful! Redirecting to dashboard... �") 
                                 st.rerun() 
                             else:
                                 st.error("Logged in, but this account does not have administrator privileges. 🚫")
@@ -413,6 +413,103 @@ else: # User is authenticated as admin
             st.info("No document data to display upload trends.")
 
 
+        # --- NEW: Users Registered Over Time ---
+        st.subheader("Users Registered Over Time")
+        if all_users:
+            users_df = pd.DataFrame(all_users)
+
+            if 'created_at' in users_df.columns and not users_df['created_at'].empty:
+                users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
+                users_df = users_df.dropna(subset=['created_at_dt'])
+
+                if not users_df.empty:
+                    min_date = users_df['created_at_dt'].min().date()
+                    max_date = users_df['created_at_dt'].max().date()
+
+                    if min_date == max_date:
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('h') 
+                        x_axis_label = 'Hour of Day'
+                    else:
+                        users_df['registration_period'] = users_df['created_at_dt'].dt.date
+                        x_axis_label = 'Date'
+
+                    users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
+                    users_over_time = users_over_time.sort_values('registration_period')
+
+                    fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
+                                             title='Users Registered Over Time',
+                                             labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
+                                             color_discrete_sequence=['purple'],
+                                             text='count') 
+                    fig_users_time.update_traces(textposition='outside') 
+                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
+                    st.plotly_chart(fig_users_time, use_container_width=True)
+                else:
+                    st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
+            else:
+                st.info("User data missing 'created_at' or is empty for trend analysis.")
+        else:
+            st.info("No user data to display registration trends.")
+
+        # --- NEW: Most Active Users (by Document Count) ---
+        st.subheader("Most Active Users (by Document Count)")
+        if all_documents and all_users:
+            doc_counts_per_user = {}
+            for doc in all_documents:
+                user_id = str(doc.get('user_id'))
+                if user_id: # Ensure user_id is not None
+                    doc_counts_per_user[user_id] = doc_counts_per_user.get(user_id, 0) + 1
+            
+            # Create a DataFrame for plotting
+            if doc_counts_per_user:
+                active_users_df = pd.DataFrame(doc_counts_per_user.items(), columns=['user_id', 'document_count'])
+                active_users_df = active_users_df.sort_values('document_count', ascending=False).head(5) # Top 5
+                
+                # Map user_id to username for better readability
+                user_id_to_username = {user['id']: user['username'] for user in all_users}
+                active_users_df['username'] = active_users_df['user_id'].map(user_id_to_username).fillna('Unknown User')
+
+                fig_active_users = px.bar(active_users_df, x='username', y='document_count',
+                                            title='Top 5 Users by Documents Uploaded',
+                                            labels={'username': 'User', 'document_count': 'Number of Documents'},
+                                            color='document_count', # Color bars by count
+                                            color_continuous_scale=px.colors.sequential.Viridis,
+                                            text='document_count')
+                fig_active_users.update_traces(textposition='outside')
+                fig_active_users.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
+                st.plotly_chart(fig_active_users, use_container_width=True)
+            else:
+                st.info("No documents uploaded or user data available to determine active users.")
+        else:
+            st.info("Not enough data to determine active users (either no documents or no users fetched).")
+
+
+        # --- NEW: Top Summarized Documents ---
+        st.subheader("Top Summarized Documents")
+        if all_documents:
+            summarized_docs = [doc for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""]]
+            
+            if summarized_docs:
+                # Sort by length of summary (as a proxy for "richness" of summarization)
+                # Or by upload_time if you prefer "most recent summarized"
+                top_docs = sorted(summarized_docs, key=lambda x: len(x['summary']) if x['summary'] else 0, reverse=True)[:5] # Top 5 by summary length
+
+                st.write("Here are some of the top summarized documents:")
+                for i, doc in enumerate(top_docs):
+                    with st.expander(f"{i+1}. {doc['filename']} (Summarized by {next((u['username'] for u in all_users if str(u['id']) == str(doc['user_id'])), 'Unknown User')})"):
+                        st.markdown(f"**Document ID:** `{doc['id']}`")
+                        st.markdown(f"**File Type:** `{doc['file_type']}`")
+                        st.markdown(f"**Upload Time:** `{doc['upload_time']}`")
+                        st.markdown(f"**Vectorized:** {'✅ Yes' if doc.get('is_vectorized') else '❌ No'}")
+                        st.markdown("---")
+                        st.markdown("**AI-Generated Summary:**")
+                        st.info(doc['summary'])
+            else:
+                st.info("No summarized documents found yet.")
+        else:
+            st.info("No document data available to display top summarized documents.")
+
+
     # --- Documents Page ---
     elif page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
@@ -562,7 +659,7 @@ else: # User is authenticated as admin
             
             user_data_display = []
             for user in current_users:
-                # Mask the email address
+                # Mask the email address (RETAINED PRIVACY FEATURE)
                 email_parts = user['email'].split('@')
                 if len(email_parts) == 2:
                     masked_email = f"{email_parts[0][0]}***@{email_parts[1].split('.')[0][0]}***.{email_parts[1].split('.')[-1]}"
@@ -576,7 +673,7 @@ else: # User is authenticated as admin
                     "Role": '👑 Admin' if bool(int(user.get('is_admin', 0))) else '👤 User',
                     "Created": datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M:%S") if 'created_at' in user else 'N/A',
                     "Status": '✅ Active' if bool(int(user.get('is_active', 0))) else '❌ Inactive',
-                    # "Gemini API Key Set": "Yes" if user.get('gemini_api_key') else "No" # Removed for privacy
+                    # Removed "Gemini API Key Set" for privacy as requested previously
                 })
             
             st.dataframe(
@@ -588,7 +685,7 @@ else: # User is authenticated as admin
                     "Username": st.column_config.TextColumn("Username", width="medium"),
                     "Email": st.column_config.TextColumn("Email", width="medium"), # Keep column config for masked email
                     "Created": st.column_config.TextColumn("Created At", width="medium"),
-                    # "Gemini API Key Set": st.column_config.TextColumn("Gemini Key") # Removed for privacy
+                    # Removed "Gemini API Key Set" column config for privacy
                 },
                 hide_index=True,
                 use_container_width=True
@@ -615,7 +712,6 @@ else: # User is authenticated as admin
                         st.markdown(f"**Account Created:** `{datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S') if 'created_at' in user else 'N/A'}`")
                         st.markdown(f"**Status:** {'✅ Active' if is_active else '❌ Inactive'}")
                         # Removed Gemini API Key from individual user details for privacy
-                        # st.markdown(f"**Gemini API Key:** {'Yes' if user.get('gemini_api_key') else 'No (or not visible)'}")
                     
                     if not is_admin:
                         st.divider()
