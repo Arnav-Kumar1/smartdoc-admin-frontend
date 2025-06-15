@@ -165,7 +165,7 @@ else: # User is authenticated as admin
             })
             fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
                                     title='Document Vectorization Status',
-                                    color_discrete_sequence=px.colors.sequential.RdBu)
+                                    color_discrete_sequence=['#4CAF50', '#FF6347'])
             st.plotly_chart(fig_doc_status, use_container_width=True)
         else:
             st.info("No document data to display status distribution.")
