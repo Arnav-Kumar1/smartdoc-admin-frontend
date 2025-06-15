@@ -16,11 +16,107 @@ load_dotenv()
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000") # Added default for robustness
 
 # Import the utility function to wait for the backend
-from app_utils import *
+from app_utils import wait_for_backend 
 
 # --- Streamlit Page Configuration ---
-st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
+# Setting a wider layout and initial sidebar state for better aesthetics
+st.set_page_config(
+    page_title="Admin Dashboard - SmartDoc AI", 
+    layout="wide", 
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'mailto:support@smartdoc.ai',
+        'Report a bug': 'mailto:bugs@smartdoc.ai',
+        'About': '# SmartDoc AI Admin Dashboard. This is an internal tool.'
+    }
+)
+
 st.title("🛠 Admin Dashboard - SmartDoc AI")
+
+# --- Custom CSS for aesthetic improvements ---
+st.markdown(
+    """
+    <style>
+    /* General body styling for a soft background */
+    body {
+        background: linear-gradient(to right, #f0f2f6, #e0e5ec);
+    }
+    
+    /* Customizing Streamlit components for a card-like appearance */
+    .stApp {
+        background: linear-gradient(to right, #f0f2f6, #e0e5ec);
+    }
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        font-size: 1.1rem;
+    }
+    
+    /* Card-like containers for sections */
+    .stContainer {
+        background-color: #ffffff; /* White background for cards */
+        border-radius: 15px; /* Rounded corners */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    /* Enhance specific Streamlit elements like buttons */
+    .stButton>button {
+        border-radius: 10px;
+        border: 1px solid #4CAF50; /* Green border */
+        color: white;
+        background-color: #4CAF50; /* Green background */
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease-in-out; /* Smooth transition for hover */
+    }
+    .stButton>button:hover {
+        background-color: #45a049; /* Darker green on hover */
+        box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px); /* Slight lift effect */
+    }
+    
+    /* Styling for primary buttons (like Delete/Confirm) */
+    .stButton>button.primary-button {
+        background-color: #FF6347; /* Tomato red */
+        border-color: #FF6347;
+    }
+    .stButton>button.primary-button:hover {
+        background-color: #E5533D; /* Darker red on hover */
+    }
+    
+    /* Adjust markdown headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: #2c3e50; /* Darker text for headings */
+        font-family: 'Segoe UI', sans-serif;
+    }
+    
+    /* Info/Success/Error banners */
+    div.stAlert {
+        border-radius: 10px;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg { /* This is a common class for the sidebar background */
+        background-color: #f8f9fa; /* Lighter sidebar background */
+        border-right: 1px solid #e0e0e0;
+    }
+
+    /* Style for metric labels */
+    div[data-testid="stMetric"] label {
+        font-size: 1.1em;
+        color: #333;
+    }
+    /* Style for metric values */
+    div[data-testid="stMetric"] div[data-testid="stMarkdownContainer"] {
+        font-size: 2em;
+        font-weight: bold;
+        color: #1a73e8; /* A nice blue for values */
+    }
+    
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
 # --- Initialize Session State Variables (Important for Reruns) ---
 if 'access_token' not in st.session_state:
@@ -47,7 +143,44 @@ if 'backend_reachable' not in st.session_state: # Initialize backend reachable s
     st.session_state.backend_reachable = False
 
 
+# --- Function to get authorization header for API requests ---
+def get_auth_header():
+    if not st.session_state.access_token:
+        return None
+    return {"Authorization": f"Bearer {st.session_state.access_token}"}
 
+# --- Function to verify if the logged-in user has admin access ---
+def verify_admin_access():
+    headers = get_auth_header()
+    if not headers:
+        st.session_state.is_admin = False
+        return False
+    try:
+        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
+        if response.status_code == 200:
+            st.session_state.is_admin = True
+            return True
+        elif response.status_code == 403:
+            st.error(f"Access denied: {response.json().get('detail', 'Not an admin')}")
+            st.session_state.is_admin = False
+            return False
+        elif response.status_code == 401:
+             st.error("Authentication failed. Please log in again.")
+             st.session_state.access_token = None
+             st.session_state.is_admin = False
+             return False
+        else:
+            st.error(f"Error verifying admin access: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
+            st.session_state.is_admin = False
+            return False
+    except requests.exceptions.ConnectionError:
+        st.error("Network error: Could not connect to the backend API during admin verification. Please ensure the backend is running.")
+        st.session_state.is_admin = False
+        return False
+    except Exception as e:
+        st.error(f"An unexpected error occurred during admin verification: {e}")
+        st.session_state.is_admin = False
+        return False
 
 # --- Backend Connection Check with Spinner and Disappearing Message (moved to top-level conditional) ---
 # This block runs only once per full app load or if backend_reachable is reset (e.g., on logout)
@@ -56,13 +189,68 @@ if not st.session_state.backend_reachable:
     with st.spinner("Attempting to connect to the backend API..."):
         if wait_for_backend():
             success_message_placeholder = st.empty()
-            success_message_placeholder.success("Successfully connected to the backend API!")
+            success_message_placeholder.success("Successfully connected to the backend API! 🎉")
             time.sleep(1)
             success_message_placeholder.empty()
             st.session_state.backend_reachable = True # Mark backend as reachable
         else:
-            st.error("Failed to connect to the backend API. Please ensure the backend is running.")
+            st.error("Failed to connect to the backend API. Please ensure the backend is running. 😞")
             st.stop() # Stop the Streamlit app if backend is not reachable
+
+
+# --- Admin Login Function ---
+def admin_login():
+    # Display login form only if backend is reachable (confirmed by the above block)
+    if st.session_state.get('backend_reachable', False):
+        st.markdown("<h3 style='text-align: center; color: #34495e;'>Admin Login</h3>", unsafe_allow_html=True)
+        st.markdown("<hr style='border: 1px solid #ddd;'>", unsafe_allow_html=True)
+
+        with st.form("login_form", clear_on_submit=False):
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Login ✨") # Added emoji to button
+            
+            if submitted:
+                if not email or not password:
+                    st.error("Please enter both email and password.")
+                else:
+                    try:
+                        login_response = requests.post(
+                            f"{BACKEND_API_URL}/auth/token",
+                            data={"username": email.lower(), "password": password} # Normalize email here too
+                        )
+                        
+                        if login_response.status_code == 200:
+                            token_data = login_response.json()
+                            st.session_state.access_token = token_data.get("access_token")
+                            st.session_state.token_type = token_data.get("token_type")
+                            st.session_state.user_id = token_data.get("user_id")
+                            st.session_state.username = token_data.get("username")
+
+                            if verify_admin_access():
+                                st.success("Admin login successful! Redirecting to dashboard... 🚀") 
+                                st.rerun() 
+                            else:
+                                st.error("Logged in, but this account does not have administrator privileges. 🚫")
+                                st.session_state.access_token = None # Clear token if not admin
+                                st.session_state.is_admin = False
+                        elif login_response.status_code == 401:
+                            error_detail = login_response.json().get("detail", "").lower()
+                            if "gemini api key is missing" in error_detail:
+                                st.error("Gemini API key is missing. Please update your profile with a valid key. 🔑")
+                            elif "your gemini api key is invalid" in error_detail:
+                                st.error("Your Gemini API key is invalid. Please update your key or contact support. ❌")
+                            elif "incorrect email or password" in error_detail:
+                                st.error("Incorrect email or password. 😔")
+                            else:
+                                st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')}")
+                        else:
+                            st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')} 😢")
+                    except requests.exceptions.ConnectionError:
+                        st.error("Could not connect to the API. Please ensure the backend is running. 🔌")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred during login: {e} 🐛")
+    st.stop() # Stop execution if we're in the login state
 
 
 # --- Data Fetching Functions (Moved to top-level for consistent definition) ---
@@ -150,7 +338,7 @@ else: # User is authenticated as admin
         
         # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-        non_vectorized_count = len(all_documents) - vectorized_count # Corrected variable name
+        non_vectorized_count = len(all_documents) - vectorized_count 
         
         with col2: 
             st.metric(label="Vectorized Docs", value=vectorized_count)
@@ -161,7 +349,7 @@ else: # User is authenticated as admin
         if all_documents:
             doc_status_data = pd.DataFrame({
                 'Status': ['Vectorized', 'Non-Vectorized'],
-                'Count': [vectorized_count, non_vectorized_count] # Corrected variable name here
+                'Count': [vectorized_count, non_vectorized_count] 
             })
             fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
                                     title='Document Vectorization Status',
@@ -223,43 +411,6 @@ else: # User is authenticated as admin
                 st.info("Document data missing 'upload_time' or is empty for trend analysis.")
         else:
             st.info("No document data to display upload trends.")
-
-        st.subheader("Users Registered Over Time")
-        if all_users:
-            users_df = pd.DataFrame(all_users)
-
-            if 'created_at' in users_df.columns and not users_df['created_at'].empty:
-                users_df['created_at_dt'] = pd.to_datetime(users_df['created_at'], errors='coerce')
-                users_df = users_df.dropna(subset=['created_at_dt'])
-
-                if not users_df.empty:
-                    min_date = users_df['created_at_dt'].min().date()
-                    max_date = users_df['created_at_dt'].max().date()
-
-                    if min_date == max_date:
-                        users_df['registration_period'] = users_df['created_at_dt'].dt.floor('h') 
-                        x_axis_label = 'Hour of Day'
-                    else:
-                        users_df['registration_period'] = users_df['created_at_dt'].dt.date
-                        x_axis_label = 'Date'
-
-                    users_over_time = users_df.groupby('registration_period').size().reset_index(name='count')
-                    users_over_time = users_over_time.sort_values('registration_period')
-
-                    fig_users_time = px.bar(users_over_time, x='registration_period', y='count', 
-                                             title='Users Registered Over Time',
-                                             labels={'registration_period': x_axis_label, 'count': 'Number of Users'},
-                                             color_discrete_sequence=['purple'],
-                                             text='count') 
-                    fig_users_time.update_traces(textposition='outside') 
-                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
-                    st.plotly_chart(fig_users_time, use_container_width=True)
-                else:
-                    st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
-            else:
-                st.info("User data missing 'created_at' or is empty for trend analysis.")
-        else:
-            st.info("No user data to display registration trends.")
 
 
     # --- Documents Page ---
@@ -411,14 +562,21 @@ else: # User is authenticated as admin
             
             user_data_display = []
             for user in current_users:
+                # Mask the email address
+                email_parts = user['email'].split('@')
+                if len(email_parts) == 2:
+                    masked_email = f"{email_parts[0][0]}***@{email_parts[1].split('.')[0][0]}***.{email_parts[1].split('.')[-1]}"
+                else:
+                    masked_email = "Hidden" # Fallback for malformed emails or single-part addresses
+
                 user_data_display.append({
                     "ID": str(user['id']), # Ensure UUID is converted to string for display
                     "Username": user['username'],
-                    "Email": user['email'],
+                    "Email": masked_email, # Display masked email
                     "Role": '👑 Admin' if bool(int(user.get('is_admin', 0))) else '👤 User',
                     "Created": datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M:%S") if 'created_at' in user else 'N/A',
                     "Status": '✅ Active' if bool(int(user.get('is_active', 0))) else '❌ Inactive',
-                    "Gemini API Key Set": "Yes" if user.get('gemini_api_key') else "No"
+                    # "Gemini API Key Set": "Yes" if user.get('gemini_api_key') else "No" # Removed for privacy
                 })
             
             st.dataframe(
@@ -428,17 +586,18 @@ else: # User is authenticated as admin
                     "Status": st.column_config.TextColumn("Status", width="small"),
                     "Role": st.column_config.TextColumn("Role", width="small"),
                     "Username": st.column_config.TextColumn("Username", width="medium"),
-                    "Email": st.column_config.TextColumn("Email", width="medium"),
+                    "Email": st.column_config.TextColumn("Email", width="medium"), # Keep column config for masked email
                     "Created": st.column_config.TextColumn("Created At", width="medium"),
-                    "Gemini API Key Set": st.column_config.TextColumn("Gemini Key")
+                    # "Gemini API Key Set": st.column_config.TextColumn("Gemini Key") # Removed for privacy
                 },
                 hide_index=True,
                 use_container_width=True
             )
             
-            selected_email = st.selectbox("View user details", [""] + [user['email'] for user in users], key="user_detail_select")
-            if selected_email:
-                user = next((u for u in users if u['email'] == selected_email), None)
+            # Change selectbox to use username instead of email for privacy
+            selected_username = st.selectbox("View user details", [""] + [user['username'] for user in users], key="user_detail_select")
+            if selected_username:
+                user = next((u for u in users if u['username'] == selected_username), None) # Find user by username
                 if user:
                     is_admin = bool(int(user.get('is_admin', 0)))
                     is_active = bool(int(user.get('is_active', 0)))
@@ -448,14 +607,15 @@ else: # User is authenticated as admin
                         st.subheader("User Information")
                         st.markdown(f"**User ID:** `{user['id']}`")
                         st.markdown(f"**Username:** `{user['username']}`")
-                        st.markdown(f"**Email:** `{user['email']}`")
+                        st.markdown(f"**Email:** `{user['email']}`") # Full email visible when explicitly viewing details
                     
                     with col2:
                         st.subheader("Account Status")
                         st.markdown(f"**Role:** {'👑 Admin' if is_admin else '👤 User'}")
                         st.markdown(f"**Account Created:** `{datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S') if 'created_at' in user else 'N/A'}`")
                         st.markdown(f"**Status:** {'✅ Active' if is_active else '❌ Inactive'}")
-                        st.markdown(f"**Gemini API Key:** {'Yes' if user.get('gemini_api_key') else 'No (or not visible)'}")
+                        # Removed Gemini API Key from individual user details for privacy
+                        # st.markdown(f"**Gemini API Key:** {'Yes' if user.get('gemini_api_key') else 'No (or not visible)'}")
                     
                     if not is_admin:
                         st.divider()
