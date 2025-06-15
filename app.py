@@ -9,18 +9,42 @@ from dotenv import load_dotenv # Used for loading environment variables locally
 import pandas as pd # Import pandas for data manipulation
 import plotly.express as px # Import plotly for beautiful graphs
 
-# Load environment variables from .env file (for local development)
+# Load environment variables
 load_dotenv()
 
 # --- Configuration ---
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000") # Added default for robustness
 
 # Import the utility function to wait for the backend
-from app_utils import *
+from app_utils import wait_for_backend 
 
 # --- Streamlit Page Configuration ---
-st.set_page_config(page_title="Admin Dashboard - SmartDoc AI", layout="wide")
+st.set_page_config(
+    page_title="Admin Dashboard - SmartDoc AI", 
+    layout="wide", 
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'mailto:support@smartdoc.ai',
+        'Report a bug': 'mailto:bugs@smartdoc.ai',
+        'About': '# SmartDoc AI Admin Dashboard. This is an internal tool.'
+    }
+)
+
 st.title("🛠 Admin Dashboard - SmartDoc AI")
+
+# --- Function to load CSS from file ---
+def load_css(file_name):
+    try:
+        with open(file_name) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error(f"CSS file '{file_name}' not found. Please ensure it's in the correct directory.")
+    except Exception as e:
+        st.error(f"Error loading CSS file: {e}")
+
+# Call the function to load the CSS
+load_css("style.css")
+
 
 # --- Initialize Session State Variables (Important for Reruns) ---
 if 'access_token' not in st.session_state:
@@ -47,28 +71,117 @@ if 'backend_reachable' not in st.session_state: # Initialize backend reachable s
     st.session_state.backend_reachable = False
 
 
+# --- Function to get authorization header for API requests ---
+def get_auth_header():
+    if not st.session_state.access_token:
+        return None
+    return {"Authorization": f"Bearer {st.session_state.access_token}"}
 
+# --- Function to verify if the logged-in user has admin access ---
+def verify_admin_access():
+    headers = get_auth_header()
+    if not headers:
+        st.session_state.is_admin = False
+        return False
+    try:
+        response = requests.get(f"{BACKEND_API_URL}/admin/users", headers=headers)
+        if response.status_code == 200:
+            st.session_state.is_admin = True
+            return True
+        elif response.status_code == 403:
+            st.error(f"Access denied: {response.json().get('detail', 'Not an admin')}")
+            st.session_state.is_admin = False
+            return False
+        elif response.status_code == 401:
+             st.error("Authentication failed. Please log in again.")
+             st.session_state.access_token = None
+             st.session_state.is_admin = False
+             return False
+        else:
+            st.error(f"Error verifying admin access: {response.status_code} - {response.json().get('detail', 'Unknown error')}")
+            st.session_state.is_admin = False
+            return False
+    except requests.exceptions.ConnectionError:
+        st.error("Network error: Could not connect to the backend API during admin verification. Please ensure the backend is running.")
+        st.session_state.is_admin = False
+        return False
+    except Exception as e:
+        st.error(f"An unexpected error occurred during admin verification: {e}")
+        st.session_state.is_admin = False
+        return False
 
 # --- Backend Connection Check with Spinner and Disappearing Message (moved to top-level conditional) ---
-# This block runs only once per full app load or if backend_reachable is reset (e.g., on logout)
 if not st.session_state.backend_reachable:
-    connection_status_placeholder = st.empty() # Placeholder for connection messages
+    connection_status_placeholder = st.empty() 
     with st.spinner("Attempting to connect to the backend API..."):
         if wait_for_backend():
             success_message_placeholder = st.empty()
-            success_message_placeholder.success("Successfully connected to the backend API!")
+            success_message_placeholder.success("Successfully connected to the backend API! 🎉")
             time.sleep(1)
             success_message_placeholder.empty()
-            st.session_state.backend_reachable = True # Mark backend as reachable
+            st.session_state.backend_reachable = True 
         else:
-            st.error("Failed to connect to the backend API. Please ensure the backend is running.")
-            st.stop() # Stop the Streamlit app if backend is not reachable
+            st.error("Failed to connect to the backend API. Please ensure the backend is running. 😞")
+            st.stop() 
 
 
-# --- Data Fetching Functions (Moved to top-level for consistent definition) ---
-# Added 'token' parameter to @st.cache_data to ensure cache invalidation on token change
-@st.cache_data(ttl=300) # Cache for 5 minutes
-def fetch_documents(token: str): # Accepts token as argument for caching key
+# --- Admin Login Function ---
+def admin_login():
+    if st.session_state.get('backend_reachable', False):
+        st.markdown("<h3 style='text-align: center; color: #34495e;'>Admin Login</h3>", unsafe_allow_html=True)
+        st.markdown("<hr style='border: 1px solid #ddd;'>", unsafe_allow_html=True)
+
+        with st.form("login_form", clear_on_submit=False):
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Login ✨") 
+            
+            if submitted:
+                if not email or not password:
+                    st.error("Please enter both email and password.")
+                else:
+                    try:
+                        login_response = requests.post(
+                            f"{BACKEND_API_URL}/auth/token",
+                            data={"username": email.lower(), "password": password} 
+                        )
+                        
+                        if login_response.status_code == 200:
+                            token_data = login_response.json()
+                            st.session_state.access_token = token_data.get("access_token")
+                            st.session_state.token_type = token_data.get("token_type")
+                            st.session_state.user_id = token_data.get("user_id")
+                            st.session_state.username = token_data.get("username")
+
+                            if verify_admin_access():
+                                st.success("Admin login successful! Redirecting to dashboard... 🚀") 
+                                st.rerun() 
+                            else:
+                                st.error("Logged in, but this account does not have administrator privileges. 🚫")
+                                st.session_state.access_token = None 
+                                st.session_state.is_admin = False
+                        elif login_response.status_code == 401:
+                            error_detail = login_response.json().get("detail", "").lower()
+                            if "gemini api key is missing" in error_detail:
+                                st.error("Gemini API key is missing. Please update your profile with a valid key. 🔑")
+                            elif "your gemini api key is invalid" in error_detail:
+                                st.error("Your Gemini API key is invalid. Please update your key or contact support. ❌")
+                            elif "incorrect email or password" in error_detail:
+                                st.error("Incorrect email or password. 😔")
+                            else:
+                                st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')}")
+                        else:
+                            st.error(f"Login failed: {login_response.json().get('detail', 'Unknown error')} 😢")
+                    except requests.exceptions.ConnectionError:
+                        st.error("Could not connect to the API. Please ensure the backend is running. 🔌")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred during login: {e} 🐛")
+    st.stop() 
+
+
+# --- Data Fetching Functions ---
+@st.cache_data(ttl=300) 
+def fetch_documents(token: str): 
     headers = {"Authorization": f"Bearer {token}"} if token else None
     if not headers: return []
     try:
@@ -85,9 +198,8 @@ def fetch_documents(token: str): # Accepts token as argument for caching key
         st.error(f"Error fetching documents: {e}")
         return []
 
-# Added 'token' parameter to @st.cache_data to ensure cache invalidation on token change
-@st.cache_data(ttl=300) # Cache for 5 minutes
-def fetch_users(token: str): # Accepts token as argument for caching key
+@st.cache_data(ttl=300) 
+def fetch_users(token: str): 
     headers = {"Authorization": f"Bearer {token}"} if token else None
     if not headers:
         return []
@@ -109,10 +221,9 @@ def fetch_users(token: str): # Accepts token as argument for caching key
 
 # --- Main Application Logic (Runs if authenticated as admin) ---
 if not st.session_state.get('is_admin', False):
-    admin_login() # Call login function if not authenticated
+    admin_login() 
 else: # User is authenticated as admin
     st.sidebar.header("Navigation")
-    # Add Dashboard to the navigation panel
     page = st.sidebar.radio("Go to", ["📊 Dashboard", "📄 Documents", "👤 Users", "➡️ Logout"])
 
     # --- Logout Logic ---
@@ -121,24 +232,22 @@ else: # User is authenticated as admin
         st.session_state.is_admin = False
         st.session_state.user_id = None
         st.session_state.username = None
-        st.session_state.backend_reachable = False # Reset backend status so it pings again on next login attempt
+        st.session_state.backend_reachable = False 
 
-        # Clear cached data and session state variables
         st.session_state.pop('unique_user_ids', None)
         st.session_state.pop('sorted_users', None)
-        st.cache_data.clear() # Clear ALL st.cache_data for functions in this script
-        st.cache_resource.clear() # Clear st.cache_resource as well if used
+        st.cache_data.clear() 
+        st.cache_resource.clear() 
 
         st.success("You have been logged out successfully.")
         time.sleep(1)
-        st.rerun() # Force rerun to go back to login screen
+        st.rerun() 
 
 
     # --- Dashboard Page ---
     elif page == "📊 Dashboard":
         st.header("📊 Admin Dashboard Overview")
         
-        # Pass access_token to cached functions to ensure cache invalidation on login/logout
         all_documents = fetch_documents(st.session_state.access_token)
         all_users = fetch_users(st.session_state.access_token)
 
@@ -148,9 +257,8 @@ else: # User is authenticated as admin
             st.metric(label="Total Users", value=len(all_users))
             st.metric(label="Total Documents", value=len(all_documents)) 
         
-        # Calculate vectorized vs. non-vectorized documents
         vectorized_count = sum(1 for doc in all_documents if doc.get('is_vectorized'))
-        non_vectorized_count = len(all_documents) - vectorized_count # Corrected variable name
+        non_vectorized_count = len(all_documents) - vectorized_count 
         
         with col2: 
             st.metric(label="Vectorized Docs", value=vectorized_count)
@@ -161,19 +269,18 @@ else: # User is authenticated as admin
         if all_documents:
             doc_status_data = pd.DataFrame({
                 'Status': ['Vectorized', 'Non-Vectorized'],
-                'Count': [vectorized_count, non_vectorized_count] # Corrected variable name here
+                'Count': [vectorized_count, non_vectorized_count] 
             })
             fig_doc_status = px.pie(doc_status_data, values='Count', names='Status', 
                                     title='Document Vectorization Status',
                                     color_discrete_sequence=['#4CAF50', '#FF6347'])
+            fig_doc_status.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)') 
             st.plotly_chart(fig_doc_status, use_container_width=True)
         else:
             st.info("No document data to display status distribution.")
 
-        # --- NEW: Document Summarization Status ---
         st.subheader("Document Summarization Status")
         if all_documents:
-            # Check if summary is None or an empty string, or "None", "null" (from JSON string conversion)
             summarized_count = sum(1 for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""])
             not_summarized_count = len(all_documents) - summarized_count
             
@@ -183,7 +290,8 @@ else: # User is authenticated as admin
             })
             fig_doc_summary = px.pie(doc_summary_data, values='Count', names='Status', 
                                     title='Document Summarization Status',
-                                    color_discrete_sequence=px.colors.qualitative.G10) # Using a different color sequence
+                                    color_discrete_sequence=px.colors.qualitative.G10) 
+            fig_doc_summary.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_doc_summary, use_container_width=True)
         else:
             st.info("No document data to display summarization status.")
@@ -215,7 +323,8 @@ else: # User is authenticated as admin
                                             labels={'upload_period': x_axis_label, 'count': 'Number of Documents'},
                                             text='count') 
                     fig_docs_time.update_traces(textposition='outside') 
-                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
+                    fig_docs_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', 
+                                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)') 
                     st.plotly_chart(fig_docs_time, use_container_width=True)
                 else:
                     st.info("All document 'upload_time' values were invalid or no data after filtering for trend analysis.")
@@ -223,6 +332,7 @@ else: # User is authenticated as admin
                 st.info("Document data missing 'upload_time' or is empty for trend analysis.")
         else:
             st.info("No document data to display upload trends.")
+
 
         st.subheader("Users Registered Over Time")
         if all_users:
@@ -252,7 +362,8 @@ else: # User is authenticated as admin
                                              color_discrete_sequence=['purple'],
                                              text='count') 
                     fig_users_time.update_traces(textposition='outside') 
-                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide') 
+                    fig_users_time.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
+                                                 paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)') 
                     st.plotly_chart(fig_users_time, use_container_width=True)
                 else:
                     st.info("All user 'created_at' values were invalid or no data after filtering for trend analysis.")
@@ -261,12 +372,65 @@ else: # User is authenticated as admin
         else:
             st.info("No user data to display registration trends.")
 
+        st.subheader("Most Active Users (by Document Count)")
+        if all_documents and all_users:
+            doc_counts_per_user = {}
+            for doc in all_documents:
+                user_id = str(doc.get('user_id'))
+                if user_id: 
+                    doc_counts_per_user[user_id] = doc_counts_per_user.get(user_id, 0) + 1
+            
+            if doc_counts_per_user:
+                active_users_df = pd.DataFrame(doc_counts_per_user.items(), columns=['user_id', 'document_count'])
+                active_users_df = active_users_df.sort_values('document_count', ascending=False).head(5) 
+                
+                user_id_to_username = {user['id']: user['username'] for user in all_users}
+                active_users_df['username'] = active_users_df['user_id'].map(user_id_to_username).fillna('Unknown User')
+
+                fig_active_users = px.bar(active_users_df, x='username', y='document_count',
+                                            title='Top 5 Users by Documents Uploaded',
+                                            labels={'username': 'User', 'document_count': 'Number of Documents'},
+                                            color='document_count', 
+                                            color_continuous_scale=px.colors.sequential.Viridis,
+                                            text='document_count')
+                fig_active_users.update_traces(textposition='outside')
+                fig_active_users.update_layout(uniformtext_minsize=8, uniformtext_mode='hide',
+                                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)') 
+                st.plotly_chart(fig_active_users, use_container_width=True)
+            else:
+                st.info("No documents uploaded or user data available to determine active users.")
+        else:
+            st.info("Not enough data to determine active users (either no documents or no users fetched).")
+
+
+        st.subheader("Top Summarized Documents")
+        if all_documents:
+            summarized_docs = [doc for doc in all_documents if doc.get('summary') and doc.get('summary') not in ["None", "null", ""]]
+            
+            if summarized_docs:
+                top_docs = sorted(summarized_docs, key=lambda x: len(x['summary']) if x['summary'] else 0, reverse=True)[:5] 
+
+                st.write("Here are some of the top summarized documents:")
+                for i, doc in enumerate(top_docs):
+                    with st.expander(f"{i+1}. {doc['filename']} (Summarized by {next((u['username'] for u in all_users if str(u['id']) == str(doc['user_id'])), 'Unknown User')})"):
+                        st.markdown(f"**Document ID:** `{doc['id']}`")
+                        st.markdown(f"**File Type:** `{doc['file_type']}`")
+                        st.markdown(f"**Upload Time:** `{doc['upload_time']}`")
+                        st.markdown(f"**Vectorized:** {'✅ Yes' if doc.get('is_vectorized') else '❌ No'}")
+                        st.markdown("---")
+                        st.markdown("**AI-Generated Summary:**")
+                        st.info(doc['summary'])
+            else:
+                st.info("No summarized documents found yet.")
+        else:
+            st.info("No document data available to display top summarized documents.")
+
 
     # --- Documents Page ---
     elif page == "📄 Documents":
         st.header("📁 All Uploaded Documents")
         
-        all_documents = fetch_documents(st.session_state.access_token) # Pass token
+        all_documents = fetch_documents(st.session_state.access_token) 
         
         if 'unique_user_ids' not in st.session_state:
             st.session_state.unique_user_ids = sorted(list({str(doc['user_id']) for doc in all_documents}))
@@ -375,11 +539,11 @@ else: # User is authenticated as admin
         
         sort_col1, sort_col2 = st.columns([1, 3])
         with sort_col1:
-            if st.button("🔽 Sort Latest First" if st.session_state.sort_order_users == 'asc' else "🔼 Sort Oldest First", key="user_sort_btn"): # Added key for uniqueness
+            if st.button("🔽 Sort Latest First" if st.session_state.sort_order_users == 'asc' else "🔼 Sort Oldest First", key="user_sort_btn"): 
                 st.session_state.sort_order_users = 'desc' if st.session_state.sort_order_users == 'asc' else 'asc'
                 st.rerun()
         
-        users = fetch_users(st.session_state.access_token) # Pass token
+        users = fetch_users(st.session_state.access_token) 
         
         if users:
             if 'sorted_users' not in st.session_state or st.session_state.sort_order_users != st.session_state.get('_prev_sort_order_users', None):
@@ -411,14 +575,20 @@ else: # User is authenticated as admin
             
             user_data_display = []
             for user in current_users:
+                # Mask the email address (RETAINED PRIVACY FEATURE)
+                email_parts = user['email'].split('@')
+                if len(email_parts) == 2:
+                    masked_email = f"{email_parts[0][0]}***@{email_parts[1].split('.')[0][0]}***.{email_parts[1].split('.')[-1]}"
+                else:
+                    masked_email = "Hidden" 
+
                 user_data_display.append({
-                    "ID": str(user['id']), # Ensure UUID is converted to string for display
+                    "ID": str(user['id']), 
                     "Username": user['username'],
-                    "Email": user['email'],
+                    "Email": masked_email, 
                     "Role": '👑 Admin' if bool(int(user.get('is_admin', 0))) else '👤 User',
                     "Created": datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M:%S") if 'created_at' in user else 'N/A',
                     "Status": '✅ Active' if bool(int(user.get('is_active', 0))) else '❌ Inactive',
-                    "Gemini API Key Set": "Yes" if user.get('gemini_api_key') else "No"
                 })
             
             st.dataframe(
@@ -428,17 +598,17 @@ else: # User is authenticated as admin
                     "Status": st.column_config.TextColumn("Status", width="small"),
                     "Role": st.column_config.TextColumn("Role", width="small"),
                     "Username": st.column_config.TextColumn("Username", width="medium"),
-                    "Email": st.column_config.TextColumn("Email", width="medium"),
+                    "Email": st.column_config.TextColumn("Email", width="medium"), 
                     "Created": st.column_config.TextColumn("Created At", width="medium"),
-                    "Gemini API Key Set": st.column_config.TextColumn("Gemini Key")
                 },
                 hide_index=True,
                 use_container_width=True
             )
             
-            selected_email = st.selectbox("View user details", [""] + [user['email'] for user in users], key="user_detail_select")
-            if selected_email:
-                user = next((u for u in users if u['email'] == selected_email), None)
+            # Change selectbox to use username instead of email for privacy
+            selected_username = st.selectbox("View user details", [""] + [user['username'] for user in users], key="user_detail_select")
+            if selected_username:
+                user = next((u for u in users if u['username'] == selected_username), None) 
                 if user:
                     is_admin = bool(int(user.get('is_admin', 0)))
                     is_active = bool(int(user.get('is_active', 0)))
@@ -448,14 +618,14 @@ else: # User is authenticated as admin
                         st.subheader("User Information")
                         st.markdown(f"**User ID:** `{user['id']}`")
                         st.markdown(f"**Username:** `{user['username']}`")
-                        st.markdown(f"**Email:** `{user['email']}`")
+                        st.markdown(f"**Email:** `{user['email']}`") 
                     
                     with col2:
                         st.subheader("Account Status")
                         st.markdown(f"**Role:** {'👑 Admin' if is_admin else '👤 User'}")
                         st.markdown(f"**Account Created:** `{datetime.fromisoformat(user['created_at'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S') if 'created_at' in user else 'N/A'}`")
                         st.markdown(f"**Status:** {'✅ Active' if is_active else '❌ Inactive'}")
-                        st.markdown(f"**Gemini API Key:** {'Yes' if user.get('gemini_api_key') else 'No (or not visible)'}")
+                        
                     
                     if not is_admin:
                         st.divider()

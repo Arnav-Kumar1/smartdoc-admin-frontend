@@ -1,0 +1,74 @@
+/* General body styling for a soft background */
+body {
+    background: linear-gradient(to right, #f0f2f6, #e0e5ec);
+}
+
+/* Customizing Streamlit components for a card-like appearance */
+.stApp {
+    background: linear-gradient(to right, #f0f2f6, #e0e5ec);
+}
+.stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+    font-size: 1.1rem;
+}
+
+/* Card-like containers for sections */
+.stContainer {
+    background-color: #ffffff; /* White background for cards */
+    border-radius: 15px; /* Rounded corners */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Enhance specific Streamlit elements like buttons */
+.stButton>button {
+    border-radius: 10px;
+    border: 1px solid #4CAF50; /* Green border */
+    color: white;
+    background-color: #4CAF50; /* Green background */
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease-in-out; /* Smooth transition for hover */
+}
+.stButton>button:hover {
+    background-color: #45a049; /* Darker green on hover */
+    box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px); /* Slight lift effect */
+}
+
+/* Styling for primary buttons (like Delete/Confirm) */
+.stButton>button.primary-button {
+    background-color: #FF6347; /* Tomato red */
+    border-color: #FF6347;
+}
+.stButton>button.primary-button:hover {
+    background-color: #E5533D; /* Darker red on hover */
+}
+
+/* Adjust markdown headers */
+h1, h2, h3, h4, h5, h6 {
+    color: #2c3e50; /* Darker text for headings */
+    font-family: 'Segoe UI', sans-serif;
+}
+
+/* Info/Success/Error banners */
+div.stAlert {
+    border-radius: 10px;
+}
+
+/* Sidebar styling */
+.css-1d391kg { /* This is a common class for the sidebar background */
+    background-color: #f8f9fa; /* Lighter sidebar background */
+    border-right: 1px solid #e0e0e0;
+}
+
+/* Style for metric labels */
+div[data-testid="stMetric"] label {
+    font-size: 1.1em;
+    color: #333;
+}
+/* Style for metric values */
+div[data-testid="stMetric"] div[data-testid="stMarkdownContainer"] {
+    font-size: 2em;
+    font-weight: bold;
+    color: #1a73e8; /* A nice blue for values */
+}
